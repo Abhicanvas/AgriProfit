@@ -36,7 +36,8 @@ CREATE TABLE users (
     role VARCHAR(20) NOT NULL 
         CHECK (role IN ('farmer', 'admin')),
     district TEXT,
-    language VARCHAR(10) NOT NULL DEFAULT 'en','ml',
+    language VARCHAR(10) NOT NULL DEFAULT 'en'
+    CHECK (language IN ('en', 'ml')),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP
