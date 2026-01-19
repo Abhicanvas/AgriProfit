@@ -36,11 +36,13 @@ CREATE TABLE users (
     role VARCHAR(20) NOT NULL 
         CHECK (role IN ('farmer', 'admin')),
     district TEXT,
-    language VARCHAR(10) NOT NULL DEFAULT 'en',
+    language VARCHAR(10) NOT NULL DEFAULT 'en','ml',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP
 );
+-- Phone numbers stored without country code (India only)
+
 -- Indexes for users
 CREATE UNIQUE INDEX idx_users_phone_active
     ON users(phone_number)
@@ -69,6 +71,8 @@ CREATE TABLE otp_requests (
     expires_at TIMESTAMP NOT NULL,
     verified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    CHECK (expires_at > created_at)
+
 );
 -- Indexes for otp_requests
 CREATE INDEX idx_otp_phone_created
