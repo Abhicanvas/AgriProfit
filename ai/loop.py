@@ -9,7 +9,8 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+# Use a guaranteed-available model
+model = genai.GenerativeModel("gemini-pro")
 
 response = model.generate_content(
     "Say exactly: GitHub Actions can talk to Gemini"
