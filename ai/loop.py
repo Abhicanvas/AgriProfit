@@ -10,9 +10,12 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 response = client.chat.completions.create(
-    model="llama3-70b-8192",
+    model="llama-3.1-8b-instant",
     messages=[
-        {"role": "user", "content": "Say exactly: Groq works perfectly in GitHub Actions"}
+        {
+            "role": "user",
+            "content": "Say exactly: Groq is working correctly in GitHub Actions"
+        }
     ],
     temperature=0
 )
