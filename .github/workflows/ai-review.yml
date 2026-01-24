@@ -1,39 +1,67 @@
-name: AI Review → Copilot
+from groq import Groq
+import os, json, re
+from pathlib import Path
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+files = []
 
-    steps:
-      - uses: actions/checkout@v4
+for path in Path(".").rglob("*"):
+    if (
+        path.suffix in [".py", ".js", ".ts"]
+        and ".github" not in str(path)
+        and "ai/" not in str(path)
+    ):
+        try:
+            files.append(f"\nFILE: {path}\n{path.read_text()}")
+        except:
+            pass
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+prompt = f"""
+You are a senior engineer doing a STRICT code review.
 
-      - run: pip install groq
+ABSOLUTE RULES:
+- DO NOT explain anything
+- DO NOT add markdown
+- DO NOT add commentary
+- OUTPUT VALID JSON ONLY
+- IF NO ISSUES, OUTPUT {{ "gaps": [] }}
 
-      - name: Run Groq review
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          python ai/review.py
+Schema (MUST MATCH EXACTLY):
+{{
+  "gaps": [
+    {{
+      "file": "path",
+      "line": number,
+      "severity": "critical|major|minor",
+      "message": "what is missing or wrong"
+    }}
+  ]
+}}
 
-      - name: Inject TODO comments
-        run: |
-          python ai/inject_todos.py
+Code:
+{''.join(files)}
+"""
 
-      - name: Commit TODOs
-        run: |
-          git config user.name "ai-reviewer"
-          git config user.email "ai-reviewer@bot"
-          git add .
-          git commit -m "AI Review: add TODO gap hints" || true
-          git push
+response = client.chat.completions.create(
+    model="llama-3.1-8b-instant",
+    messages=[{"role": "user", "content": prompt}],
+    temperature=0
+)
+
+raw = response.choices[0].message.content.strip()
+
+# --- HARDENING: extract JSON safely ---
+match = re.search(r"\{.*\}", raw, re.DOTALL)
+
+if not match:
+    print(json.dumps({"gaps": []}))
+    exit(0)
+
+try:
+    parsed = json.loads(match.group())
+except json.JSONDecodeError:
+    parsed = {"gaps": []}
+
+with open("gaps.json", "w") as f:
+    json.dump(parsed, f, indent=2)
