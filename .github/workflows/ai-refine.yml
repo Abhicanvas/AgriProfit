@@ -18,7 +18,5 @@ jobs:
           python-version: '3.11'
 
       - name: Run AI loop
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Workflow wired correctly"
+          python ai/loop.py
