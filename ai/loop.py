@@ -1,22 +1,19 @@
-from openai import OpenAI
+import google.generativeai as genai
 import os
 
 print("AI loop started ✅")
 
-# Load API key
-api_key = os.environ.get("OPENAI_API_KEY")
-
+api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
-    raise RuntimeError("OPENAI_API_KEY not found")
+    raise RuntimeError("GEMINI_API_KEY not found")
 
-client = OpenAI(api_key=api_key)
+genai.configure(api_key=api_key)
 
-response = client.chat.completions.create(
-    model="gpt-4.1-mini",
-    messages=[
-        {"role": "user", "content": "Say: GitHub Actions can talk to ChatGPT"}
-    ],
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+response = model.generate_content(
+    "Say exactly: GitHub Actions can talk to Gemini"
 )
 
-print("ChatGPT response:")
-print(response.choices[0].message.content)
+print("Gemini response:")
+print(response.text)
