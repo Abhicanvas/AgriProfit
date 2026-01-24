@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models import User
-from app.mandi.schemas import MandiCreate, MandiUpdate, MandiResponse
-from app.mandi.service import MandiService
-from app.auth.security import get_current_user
+from app.mandi.schemas import MandiCreate, MandiUpdate, MandiResponse  # ✅ Correct
+from app.mandi.service import MandiService  # ✅ Correct
+from app.auth.security import get_current_user, require_role
 
 router = APIRouter(prefix="/mandis", tags=["Mandis"])
 
@@ -20,9 +20,9 @@ router = APIRouter(prefix="/mandis", tags=["Mandis"])
 async def create_mandi(
     mandi_data: MandiCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ) -> MandiResponse:
-    """Create a new mandi (requires authentication)."""
+    """Create a new mandi (admin only)."""
     service = MandiService(db)
     try:
         mandi = service.create(mandi_data)
@@ -116,9 +116,9 @@ async def update_mandi(
     mandi_id: UUID,
     mandi_data: MandiUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ) -> MandiResponse:
-    """Update an existing mandi (requires authentication)."""
+    """Update an existing mandi (admin only)."""
     service = MandiService(db)
 
     # Check if at least one field is provided
@@ -151,9 +151,9 @@ async def update_mandi(
 async def delete_mandi(
     mandi_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ) -> None:
-    """Soft delete a mandi (requires authentication)."""
+    """Soft delete a mandi (admin only)."""
     service = MandiService(db)
     deleted = service.delete(mandi_id)
     if not deleted:
