@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -31,7 +31,7 @@ class OTPRequest(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
 
     phone_number: Mapped[str] = mapped_column(
@@ -52,7 +52,7 @@ class OTPRequest(Base):
     verified: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        server_default=text("false"),
+        default=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(

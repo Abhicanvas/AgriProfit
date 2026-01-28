@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     text,
+    JSON,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,16 +26,29 @@ class AdminAction(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
     admin_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    target_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_resource_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
+    )
     action_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
+    )
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
     action_metadata: Mapped[dict[str, object] | None] = mapped_column(
         JSONB,
@@ -43,12 +57,13 @@ class AdminAction(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
         nullable=False,
-        server_default=text("NOW()"),
+        default=datetime.utcnow,
     )
     admin: Mapped["User"] = relationship(
         "User",
         back_populates="admin_actions",
-        passive_deletes=True,  # ✅ Required for ON DELETE RESTRICT
+        foreign_keys=[admin_id],
+        passive_deletes=True,
     )
     __table_args__ = (
         Index(

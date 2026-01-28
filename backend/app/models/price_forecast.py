@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -29,12 +29,17 @@ class PriceForecast(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
     commodity_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("commodities.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    mandi_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("mandis.id", ondelete="CASCADE"),
+        nullable=True,
     )
     mandi_name: Mapped[str] = mapped_column(
         Text,
@@ -44,13 +49,17 @@ class PriceForecast(Base):
         Date,
         nullable=False,
     )
-    forecasted_price: Mapped[Decimal] = mapped_column(
+    predicted_price: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )
-    confidence_score: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2),
-        nullable=False,
+    confidence_level: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4),
+        nullable=True,
+    )
+    model_version: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
@@ -68,12 +77,12 @@ class PriceForecast(Base):
     )
     __table_args__ = (
         CheckConstraint(
-            "forecasted_price >= 0",
-            name="price_forecasts_forecasted_price_check",
+            "predicted_price >= 0",
+            name="price_forecasts_predicted_price_check",
         ),
         CheckConstraint(
-            "confidence_score BETWEEN 0 AND 100",
-            name="price_forecasts_confidence_score_check",
+            "confidence_level BETWEEN 0 AND 1",
+            name="price_forecasts_confidence_level_check",
         ),
         Index(
             "price_forecasts_commodity_id_mandi_name_forecast_date_key",
@@ -97,6 +106,6 @@ class PriceForecast(Base):
         return (
             f"<PriceForecast commodity={self.commodity_id} "
             f"mandi={self.mandi_name} date={self.forecast_date} "
-            f"price={self.forecasted_price} confidence={self.confidence_score}>"
+            f"price={self.predicted_price} confidence={self.confidence_level}>"
         )
 __all__ = ["PriceForecast"]

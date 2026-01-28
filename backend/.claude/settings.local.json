@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m alembic revision:*)",
+      "Bash(set DATABASE_URL=sqlite:///test.db)",
+      "Bash(set DATABASE_URL=sqlite:///test_migration.db)",
+      "Bash($env:DATABASE_URL='sqlite:///test_migration.db')",
+      "Bash(export DATABASE_URL='sqlite:///test_migration.db')",
+      "Bash(python -m alembic:*)",
+      "Bash(pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(python -m pip:*)",
+      "Bash(python scripts/manage_db.py:*)",
+      "Bash(python:*)",
+      "Bash(.venvScriptspython.exe -c \"from app.main import app; print\\(''App loaded successfully''\\); print\\(f''Routes: {len\\(app.routes\\)}''\\)\")",
+      "Bash(\"C:/Users/alame/Desktop/repo-root/backend/.venv/Scripts/python.exe\":*)",
+      "Bash(\"C:/Users/alame/Desktop/repo-root/backend/.venv/Scripts/pip.exe\" install slowapi redis python-json-logger)",
+      "Bash(\"C:/Users/alame/Desktop/repo-root/backend/.venv/Scripts/pip.exe\" freeze:*)",
+      "Bash(\"C:/Users/alame/Desktop/repo-root/backend/.venv/Scripts/python.exe\" -c:*)",
+      "Bash(\"C:/Users/alame/Desktop/repo-root/backend/.venv/Scripts/pip.exe\" show pydantic-settings)",
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(for:*)",
+      "Bash(do if [ -f \"$f\" ])",
+      "Bash(then sed -i '1s/^\\\\xEF\\\\xBB\\\\xBF//' \"$f\")",
+      "Bash(echo:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(xxd:*)",
+      "Bash(timeout 15 npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(tee:*)",
+      "Bash(ls:*)",
+      "Bash(npx create-next-app@15:*)",
+      "Bash(if not exist:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}

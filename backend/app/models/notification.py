@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -12,6 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    String,
     Text,
     Boolean,
     TIMESTAMP,
@@ -32,7 +33,7 @@ class Notification(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
 
     user_id: Mapped[UUID] = mapped_column(
@@ -47,21 +48,42 @@ class Notification(Base):
         nullable=True,
     )
 
+    related_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    title: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     message: Mapped[str] = mapped_column(
         Text,
         nullable=False,
     )
 
+    notification_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
     is_read: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        server_default=text("false"),
+        default=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
         nullable=False,
-        server_default=text("NOW()"),
+        default=datetime.utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP,
+        nullable=False,
+        default=datetime.utcnow,
     )
 
     read_at: Mapped[datetime | None] = mapped_column(

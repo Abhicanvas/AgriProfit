@@ -209,4 +209,5 @@ class UserService:
             User.district == district,
             User.deleted_at.is_(None),
         ).order_by(User.created_at.desc()).all()
-
+    
+    

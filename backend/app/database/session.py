@@ -1,20 +1,22 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-import os
 import re
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://agriprofit:agriprofit@localhost:5432/agriprofit",
-)
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+# Import directly from config module to avoid __init__.py cascade
+from app.core.config import settings
+
 
 # Debug logging: show DATABASE_URL with password masked
-_masked_url = re.sub(r'://[^:]+:[^@]+@', '://***:***@', DATABASE_URL)
+_masked_url = re.sub(r'://[^:]+:[^@]+@', '://***:***@', settings.database_url)
 print(f"[DB] Connecting to: {_masked_url}")
 
 engine = create_engine(
-    DATABASE_URL,
+    settings.database_url,
     pool_pre_ping=True,
+    pool_size=settings.database_pool_size,
+    max_overflow=settings.database_max_overflow,
+    echo=settings.database_echo,
 )
 
 SessionLocal = sessionmaker(

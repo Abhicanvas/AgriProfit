@@ -8,6 +8,14 @@ from app.auth.security import hash_value, verify_hashed_value, create_access_tok
 from app.auth.otp import is_otp_expired
 
 
+def send_otp_sms(phone_number: str, otp: str) -> bool:
+    """Send OTP via SMS. This is a stub that can be replaced with actual SMS integration."""
+    # In production, this would integrate with an SMS provider
+    # For now, this is a stub that always returns True
+    print(f"[SMS STUB] Would send OTP {otp} to {phone_number}")
+    return True
+
+
 class AuthService:
     """Service class for authentication operations."""
 

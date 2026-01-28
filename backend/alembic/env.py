@@ -11,15 +11,32 @@ sys.path.append(str(BASE_DIR))
 from dotenv import load_dotenv
 load_dotenv(BASE_DIR / ".env")
 
+# Import Base for metadata
 from app.database.base import Base
+
+# Import settings to get database URL
+from app.core.config import settings
+
+# Import all models to ensure they're registered with Base.metadata
+# This is critical for autogenerate to detect all tables
+from app.models import (
+    User,
+    OTPRequest,
+    Mandi,
+    Commodity,
+    PriceHistory,
+    PriceForecast,
+    CommunityPost,
+    Notification,
+    AdminAction,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override sqlalchemy.url from environment variable if set
-if os.getenv("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
+# Set sqlalchemy.url from settings
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

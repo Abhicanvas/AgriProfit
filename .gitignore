@@ -1,5 +1,31 @@
 __pycache__/
 *.pyc
-.env
 .venv
 nul
+
+# Environment files (keep templates, ignore actual configs)
+.env
+.env.local
+.env.*.local
+# Keep these templates in version control:
+# .env.example
+# .env.development
+# .env.staging
+# .env.production
+
+# Logs
+logs/
+*.log
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+test.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+

@@ -2,15 +2,19 @@ import secrets
 import string
 from datetime import datetime, timedelta
 
+from app.core.config import settings
 
-def generate_otp(length: int = 6) -> str:
+
+def generate_otp(length: int | None = None) -> str:
     """Generate a cryptographically secure numeric OTP."""
-    return "".join(secrets.choice(string.digits) for _ in range(length))
+    otp_length = length if length is not None else settings.otp_length
+    return "".join(secrets.choice(string.digits) for _ in range(otp_length))
 
 
-def generate_otp_expiry(minutes: int = 5) -> datetime:
+def generate_otp_expiry(minutes: int | None = None) -> datetime:
     """Generate OTP expiry timestamp."""
-    return datetime.utcnow() + timedelta(minutes=minutes)
+    expire_minutes = minutes if minutes is not None else settings.otp_expire_minutes
+    return datetime.utcnow() + timedelta(minutes=expire_minutes)
 
 
 def is_otp_expired(expires_at: datetime) -> bool:

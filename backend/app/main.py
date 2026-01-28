@@ -1,37 +1,365 @@
+"""
+AgriProfit API - Agricultural Commodity Price Tracking Platform
+
+A comprehensive REST API for tracking agricultural commodity prices across
+Kerala's mandis (markets), providing price forecasts, community features,
+and analytics for farmers and agricultural stakeholders.
+
+This module initializes the FastAPI application with all routes, middleware,
+and configuration settings.
+"""
 from dotenv import load_dotenv
 load_dotenv()  # MUST be first - before any app imports that read env vars
 
+import sys
+from contextlib import asynccontextmanager
+
 from app.database.base import Base
 from app.database.session import engine
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+# Core modules (config, logging, rate limiting, middleware)
+from app.core.config import settings
+from app.core.logging_config import setup_logging, get_logger
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.core.middleware import (
+    RequestLoggingMiddleware,
+    SecurityMonitoringMiddleware,
+    ErrorLoggingMiddleware,
+)
+
 # ROUTER IMPORTS
 from app.auth.routes import router as auth_router
 from app.commodities.routes import router as commodities_router
 from app.mandi.routes import router as mandis_router
 from app.users.routes import router as users_router
-# APP INIT (MUST COME BEFORE include_router)
+from app.prices.routes import router as prices_router
+from app.forecasts.routes import router as forecasts_router
+from app.community.routes import router as community_router
+from app.notifications.routes import router as notifications_router
+from app.admin.routes import router as admin_router
+from app.analytics.routes import router as analytics_router
+
+
+# =============================================================================
+# API METADATA & TAGS
+# =============================================================================
+
+API_TITLE = settings.api_title
+API_VERSION = settings.api_version
+API_DESCRIPTION = """
+## Agricultural Commodity Price Tracking & Forecasting Platform
+
+AgriProfit empowers Kerala's farmers with real-time market intelligence,
+price forecasts, and community support.
+
+### Key Features
+
+* **Price Tracking** - Real-time prices from 100+ mandis across Kerala
+* **Price Forecasts** - ML-powered predictions for informed selling decisions
+* **Community** - Connect with fellow farmers, share tips and market insights
+* **Notifications** - Price alerts, weather updates, and market announcements
+* **Analytics** - Trends, comparisons, and market statistics
+
+### Authentication
+
+Most endpoints require JWT authentication. Obtain a token via OTP-based phone verification:
+
+1. Request OTP: `POST /auth/request-otp`
+2. Verify OTP: `POST /auth/verify-otp` (returns JWT token)
+3. Include token: `Authorization: Bearer <token>`
+
+### Rate Limits
+
+* OTP requests: 1 per 60 seconds per phone number
+* API calls: 100 requests per minute per user
+
+### Support
+
+For issues or feedback, contact the development team.
+"""
+
+# Tag metadata for grouping endpoints in docs
+TAGS_METADATA = [
+    {
+        "name": "Health",
+        "description": "Health check endpoints for monitoring and load balancers.",
+    },
+    {
+        "name": "Authentication",
+        "description": "OTP-based phone authentication. Request OTP, verify, and receive JWT tokens.",
+    },
+    {
+        "name": "Users",
+        "description": "User profile management. View and update profiles, admin user management.",
+    },
+    {
+        "name": "Commodities",
+        "description": "Agricultural commodities catalog. Rice, wheat, vegetables, spices, and more.",
+    },
+    {
+        "name": "Mandis",
+        "description": "Market (mandi) directory. Kerala's agricultural markets with locations and details.",
+    },
+    {
+        "name": "Prices",
+        "description": "Historical price data. Daily min/max/modal prices by commodity and mandi.",
+    },
+    {
+        "name": "Forecasts",
+        "description": "ML-powered price predictions. Future price forecasts with confidence scores.",
+    },
+    {
+        "name": "Community",
+        "description": "Community posts and discussions. Tips, questions, and market insights from farmers.",
+    },
+    {
+        "name": "Notifications",
+        "description": "User notifications. Price alerts, announcements, and system messages.",
+    },
+    {
+        "name": "Admin",
+        "description": "Administrative actions log. Audit trail for admin operations (admin only).",
+    },
+    {
+        "name": "Analytics",
+        "description": "Market analytics and insights. Trends, statistics, comparisons, and dashboards.",
+    },
+]
+
+
+# =============================================================================
+# LIFESPAN EVENT HANDLER
+# =============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan handler for startup and shutdown events.
+
+    Startup:
+    - Validate configuration
+    - Configure logging
+    - Initialize rate limiter
+
+    Shutdown:
+    - Cleanup resources
+    """
+    # Startup
+    setup_logging()
+    logger = get_logger("app")
+
+    # Validate configuration in production
+    if settings.is_production:
+        validation_errors = settings.validate_production_settings()
+        if validation_errors:
+            for error in validation_errors:
+                logger.error(f"Configuration error: {error}")
+            logger.critical("Startup aborted due to configuration errors")
+            sys.exit(1)
+
+    # Log startup with configuration info
+    logger.info(
+        "AgriProfit API starting up",
+        extra={
+            "version": API_VERSION,
+            "environment": settings.environment.value,
+            "debug": settings.debug,
+        }
+    )
+
+    yield
+
+    # Shutdown
+    logger.info("AgriProfit API shutting down")
+
+
+# =============================================================================
+# APP INITIALIZATION
+# =============================================================================
+
 app = FastAPI(
-    title="AgriProfit API",
-    description="Agricultural commodity price tracking and forecasting platform",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION,
+    docs_url="/docs" if settings.debug else None,  # Disable docs in production if needed
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_tags=TAGS_METADATA,
+    contact={
+        "name": "AgriProfit Development Team",
+        "email": settings.api_contact_email,
+    },
+    license_info={
+        "name": "Proprietary",
+        "identifier": "LicenseRef-AgriProfit",
+    },
+    servers=[
+        {"url": "http://localhost:8000", "description": "Local Development"},
+        {"url": "https://api.agriprofit.in", "description": "Production"},
+        {"url": "https://staging-api.agriprofit.in", "description": "Staging"},
+    ],
+    lifespan=lifespan,
+    debug=settings.debug,
 )
-# CORS
+
+# Initialize rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+# =============================================================================
+# CUSTOM OPENAPI SCHEMA
+# =============================================================================
+
+def custom_openapi():
+    """Generate custom OpenAPI schema with additional metadata."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=API_TITLE,
+        version=API_VERSION,
+        description=API_DESCRIPTION,
+        routes=app.routes,
+        tags=TAGS_METADATA,
+    )
+
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT token obtained from /auth/verify-otp endpoint",
+        }
+    }
+
+    # Add global security requirement for protected endpoints
+    # Individual endpoints can override this
+    openapi_schema["security"] = [{"BearerAuth": []}]
+
+    # Add additional info
+    openapi_schema["info"]["x-logo"] = {
+        "url": "https://agriprofit.in/logo.png",
+        "altText": "AgriProfit Logo",
+    }
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
+# =============================================================================
+# MIDDLEWARE (order matters - first added = last executed)
+# =============================================================================
+
+# CORS middleware (should be outermost for preflight requests)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
-# ROUTERS (AFTER app exists)
+
+# Error logging middleware (catch unhandled exceptions)
+app.add_middleware(ErrorLoggingMiddleware)
+
+# Security monitoring middleware (track auth failures, admin actions)
+app.add_middleware(SecurityMonitoringMiddleware)
+
+# Request logging middleware (log all requests with timing)
+app.add_middleware(RequestLoggingMiddleware)
+
+
+# =============================================================================
+# ROUTERS
+# =============================================================================
+
 app.include_router(auth_router)
 app.include_router(commodities_router)
 app.include_router(mandis_router)
 app.include_router(users_router)
+app.include_router(prices_router)
+app.include_router(forecasts_router)
+app.include_router(community_router)
+app.include_router(notifications_router)
+app.include_router(admin_router)
+app.include_router(analytics_router)
+
+
+# =============================================================================
 # HEALTH CHECK
-@app.get("/health", tags=["Health"])
+# =============================================================================
+
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Health Check",
+    description="Check if the API is running and healthy. Used by load balancers and monitoring systems.",
+    responses={
+        200: {
+            "description": "API is healthy",
+            "content": {
+                "application/json": {
+                    "example": {"status": "healthy", "version": "1.0.0"}
+                }
+            }
+        }
+    }
+)
 def health_check():
-    return {"status": "healthy"}
+    """
+    Perform a health check on the API.
+
+    Returns a simple status indicating the API is running.
+    This endpoint does not require authentication and is used
+    by load balancers and monitoring systems.
+
+    Returns:
+        dict: Health status with API version
+    """
+    return {"status": "healthy", "version": API_VERSION}
+
+
+@app.get(
+    "/",
+    tags=["Health"],
+    summary="API Root",
+    description="Welcome endpoint with API information and documentation links.",
+    responses={
+        200: {
+            "description": "API information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "name": "AgriProfit API",
+                        "version": "1.0.0",
+                        "docs": "/docs",
+                        "redoc": "/redoc"
+                    }
+                }
+            }
+        }
+    }
+)
+def root():
+    """
+    API root endpoint with welcome message and documentation links.
+
+    Returns:
+        dict: API name, version, and documentation URLs
+    """
+    return {
+        "name": API_TITLE,
+        "version": API_VERSION,
+        "description": "Agricultural Commodity Price Tracking Platform",
+        "docs": "/docs",
+        "redoc": "/redoc",
+    }

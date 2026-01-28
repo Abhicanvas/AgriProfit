@@ -31,17 +31,25 @@ class MandiService:
         self,
         skip: int = 0,
         limit: int = 100,
+        state: str | None = None,
         district: str | None = None,
+        is_active: bool | None = None,
         include_inactive: bool = False,
     ) -> list[Mandi]:
         """Get all mandis with optional filtering."""
         query = self.db.query(Mandi)
 
-        if not include_inactive:
+        # Handle is_active filter
+        if is_active is not None:
+            query = query.filter(Mandi.is_active == is_active)
+        elif not include_inactive:
             query = query.filter(Mandi.is_active == True)
 
+        if state:
+            query = query.filter(Mandi.state == state)
+
         if district:
-            query = query.filter(Mandi.district == district.strip().title())
+            query = query.filter(Mandi.district == district)
 
         return query.order_by(Mandi.name).offset(skip).limit(limit).all()
 
@@ -137,15 +145,23 @@ class MandiService:
             self.db.rollback()
             raise
 
-    def count(self, district: str | None = None, include_inactive: bool = False) -> int:
+    def count(
+        self,
+        state: str | None = None,
+        district: str | None = None,
+        include_inactive: bool = False,
+    ) -> int:
         """Count mandis with optional filtering."""
         query = self.db.query(Mandi)
 
         if not include_inactive:
             query = query.filter(Mandi.is_active == True)
 
+        if state:
+            query = query.filter(Mandi.state == state)
+
         if district:
-            query = query.filter(Mandi.district == district.strip().title())
+            query = query.filter(Mandi.district == district)
 
         return query.count()
 

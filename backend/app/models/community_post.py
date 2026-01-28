@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -33,7 +33,7 @@ class CommunityPost(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
 
     user_id: Mapped[UUID] = mapped_column(
@@ -65,7 +65,7 @@ class CommunityPost(Base):
     is_admin_override: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        server_default=text("false"),
+        default=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(

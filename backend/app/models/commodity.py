@@ -1,3 +1,4 @@
+import uuid as uuid_module
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy import String, TIMESTAMP, text
@@ -12,7 +13,7 @@ class Commodity(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
 
     name: Mapped[str] = mapped_column(
@@ -23,6 +24,16 @@ class Commodity(Base):
 
     name_local: Mapped[str | None] = mapped_column(
         String(100),
+        nullable=True,
+    )
+
+    category: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    unit: Mapped[str | None] = mapped_column(
+        String(20),
         nullable=True,
     )
 

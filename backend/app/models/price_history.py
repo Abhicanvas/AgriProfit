@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_module
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, DECIMAL,
     ForeignKey, Text, CheckConstraint
@@ -35,13 +35,19 @@ class PriceHistory(Base):
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("uuid_generate_v4()"),
+        default=uuid_module.uuid4,
     )
 
     commodity_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("commodities.id", ondelete="CASCADE"),
         nullable=False,
+    )
+
+    mandi_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("mandis.id", ondelete="CASCADE"),
+        nullable=True,
     )
 
     mandi_name: Mapped[str] = mapped_column(
@@ -54,14 +60,19 @@ class PriceHistory(Base):
         nullable=False,
     )
 
-    price: Mapped[Decimal] = mapped_column(
+    modal_price: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )
 
-    unit: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
+    min_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+
+    max_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -84,7 +95,7 @@ class PriceHistory(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "price >= 0",
+            "modal_price >= 0",
             name="check_price_non_negative",
         ),
         Index(
@@ -109,7 +120,7 @@ class PriceHistory(Base):
     def __repr__(self) -> str:
         return (
             f"<PriceHistory commodity={self.commodity_id} "
-            f"mandi={self.mandi_name} date={self.price_date} price={self.price}>"
+            f"mandi={self.mandi_name} date={self.price_date} price={self.modal_price}>"
         )
 
 
