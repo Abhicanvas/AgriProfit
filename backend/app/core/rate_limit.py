@@ -59,9 +59,12 @@ def get_phone_number(request: Request) -> str:
     Get phone number from request body for OTP rate limiting.
 
     Falls back to IP if phone number not available.
+    Note: This function cannot easily access request body synchronously.
+    For proper phone-based rate limiting, use the phone number directly
+    in the route handler via limiter.limit() decorator with a custom key.
     """
-    # For OTP endpoints, we want to limit by phone number
-    # This is handled specially in the route decorator
+    # Request body is async and consumed once, so we fall back to IP here.
+    # Proper phone-based limiting should be done at the route level.
     return get_ip_address(request)
 
 
@@ -75,7 +78,20 @@ def create_limiter() -> Limiter:
 
     Uses Redis in production for distributed rate limiting,
     falls back to in-memory storage for development.
+    In development mode, rate limiting is disabled entirely.
     """
+    # DISABLE rate limiting in development to avoid issues with testing
+    if settings.is_development:
+        # Return a no-op limiter for development
+        return Limiter(
+            key_func=get_request_identifier,
+            default_limits=[],  # No default limits
+            storage_uri="memory://",
+            strategy="fixed-window",
+            headers_enabled=False,
+            enabled=False,  # Disable the limiter entirely
+        )
+    
     return Limiter(
         key_func=get_request_identifier,
         default_limits=[RATE_LIMIT_READ],

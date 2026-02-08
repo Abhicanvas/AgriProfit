@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -77,7 +77,7 @@ class NotificationService:
 
         try:
             notification.is_read = True
-            notification.read_at = datetime.utcnow()
+            notification.read_at = datetime.now(timezone.utc)
             self.db.commit()
             self.db.refresh(notification)
             return notification
@@ -115,7 +115,7 @@ class NotificationService:
                 Notification.is_read == False,
             ).update({
                 "is_read": True,
-                "read_at": datetime.utcnow(),
+                "read_at": datetime.now(timezone.utc),
             })
             self.db.commit()
             return count

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import AdminAction
@@ -50,7 +51,7 @@ class AdminActionService:
                 target_user_id=target_user_id,
                 target_resource_id=target_resource_id,
                 description=description,
-                metadata=metadata,
+                action_metadata=metadata,
             )
             self.db.add(action)
             self.db.commit()
@@ -184,8 +185,11 @@ class AdminActionService:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> dict[str, int]:
-        """Get count summary by action type."""
-        query = self.db.query(AdminAction)
+        """Get count summary by action type using database aggregation."""
+        query = self.db.query(
+            AdminAction.action_type,
+            func.count(AdminAction.id).label('count')
+        )
 
         if start_date:
             query = query.filter(AdminAction.created_at >= start_date)
@@ -193,11 +197,6 @@ class AdminActionService:
         if end_date:
             query = query.filter(AdminAction.created_at <= end_date)
 
-        actions = query.all()
+        results = query.group_by(AdminAction.action_type).all()
 
-        summary = {}
-        for action in actions:
-            action_type = action.action_type
-            summary[action_type] = summary.get(action_type, 0) + 1
-
-        return summary
+        return {action_type: count for action_type, count in results}

@@ -68,9 +68,23 @@ export default function LoginPage() {
             // Store the token
             localStorage.setItem('token', response.access_token);
 
+            // Check if new user needs to complete profile
+            if (response.is_new_user) {
+                toast.success('Phone verified! Please complete your profile.');
+                router.push(`/register?step=profile&token=${response.access_token}`);
+                return;
+            }
+
             // Fetch user data
             const user = await authService.getCurrentUser();
             console.log('User data fetched:', user);
+
+            // Check if existing user has completed profile
+            if (!user.is_profile_complete) {
+                toast.info('Please complete your profile to continue.');
+                router.push('/register?step=profile');
+                return;
+            }
 
             // Update auth store
             setAuth(user, response.access_token);
@@ -158,6 +172,12 @@ export default function LoginPage() {
                             </button>
                         </form>
                     )}
+                    <p className="text-center text-sm text-gray-600 mt-4">
+                        New to AgriProfit?{' '}
+                        <a href="/register" className="text-green-600 hover:underline">
+                            Register here
+                        </a>
+                    </p>
                 </div>
             </div>
         </div>

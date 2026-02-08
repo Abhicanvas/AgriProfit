@@ -18,10 +18,12 @@ from app.community.schemas import (
     CommunityPostUpdate,
     CommunityPostResponse,
     CommunityPostListResponse,
+    CommunityReplyCreate,
+    CommunityReplyResponse,
     VALID_POST_TYPES,
 )
 from app.community.service import CommunityPostService
-from app.auth.security import get_current_user, require_role
+from app.auth.security import get_current_user, get_current_user_optional, require_role
 from app.core.rate_limit import limiter, RATE_LIMIT_READ, RATE_LIMIT_WRITE
 
 router = APIRouter(prefix="/community/posts", tags=["Community"])
@@ -48,7 +50,10 @@ async def create_post(
     service = CommunityPostService(db)
     try:
         post = service.create(post_data, user_id=current_user.id)
-        return post
+        # Enrich with author name
+        response_dict = {**post.__dict__}
+        response_dict['author_name'] = current_user.name
+        return CommunityPostResponse(**response_dict)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -89,6 +94,7 @@ async def search_posts(
 async def get_post(
     post_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> CommunityPostResponse:
     """Get a single community post by ID."""
     service = CommunityPostService(db)
@@ -98,7 +104,14 @@ async def get_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found",
         )
-    return post
+    # Build response with user_has_liked and author_name
+    post_dict = {**post.__dict__}
+    if hasattr(post, 'user') and post.user:
+        post_dict['author_name'] = post.user.name
+    response = CommunityPostResponse(**post_dict)
+    if current_user:
+        response.user_has_liked = service.has_user_liked(post_id, current_user.id)
+    return response
 
 
 @router.get(
@@ -135,6 +148,15 @@ async def list_posts(
         district=district,
     )
 
+    # Enrich posts with author names
+    enriched_posts = []
+    for post in posts:
+        post_dict = {**post.__dict__}
+        # Get author name from the joined user relationship
+        if hasattr(post, 'user') and post.user:
+            post_dict['author_name'] = post.user.name
+        enriched_posts.append(CommunityPostResponse(**post_dict))
+
     total = service.count(
         user_id=user_id,
         post_type=post_type,
@@ -142,7 +164,7 @@ async def list_posts(
     )
 
     return CommunityPostListResponse(
-        items=posts,
+        items=enriched_posts,
         total=total,
         skip=skip,
         limit=limit,
@@ -377,3 +399,122 @@ async def restore_post(
             detail="Deleted post not found",
         )
     return post
+
+
+@router.get(
+    "/{post_id}/replies",
+    response_model=list[CommunityReplyResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get Replies",
+    description="Get all replies for a community post. Public endpoint.",
+    responses={
+        200: {"description": "List of replies"},
+        404: {"description": "Post not found"},
+    }
+)
+async def get_replies(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Get all replies for a post."""
+    service = CommunityPostService(db)
+    
+    # Verify post exists
+    post = service.get_by_id(post_id)
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found",
+        )
+    
+    replies = service.get_replies(post_id)
+    
+    # Construct response using Pydantic models for proper serialization
+    return [
+        CommunityReplyResponse(
+            id=reply.id,
+            post_id=reply.post_id,
+            user_id=reply.user_id,
+            content=reply.content,
+            created_at=reply.created_at,
+            author_name=getattr(reply.user, 'name', None)
+        )
+        for reply in replies
+    ]
+
+
+@router.post(
+    "/{post_id}/reply",
+    response_model=CommunityReplyResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Reply",
+    description="Add a reply to a community post. Requires authentication.",
+)
+async def add_reply(
+    post_id: UUID,
+    reply_data: CommunityReplyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add a reply to a post."""
+    service = CommunityPostService(db)
+    try:
+        reply = service.add_reply(
+            post_id=post_id,
+            user_id=current_user.id,
+            content=reply_data.content
+        )
+        # Construct response using Pydantic model for proper serialization
+        return CommunityReplyResponse(
+            id=reply.id,
+            post_id=reply.post_id,
+            user_id=reply.user_id,
+            content=reply.content,
+            created_at=reply.created_at,
+            author_name=getattr(reply.user, 'name', None) or current_user.name
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.post(
+    "/{post_id}/upvote",
+    status_code=status.HTTP_200_OK,
+    summary="Upvote Post",
+    description="Upvote a community post. Idempotent (does nothing if already upvoted).",
+)
+async def upvote_post(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upvote a post."""
+    service = CommunityPostService(db)
+    try:
+        service.upvote_post(post_id, current_user.id)
+        return {"message": "Post upvoted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.delete(
+    "/{post_id}/upvote",
+    status_code=status.HTTP_200_OK,
+    summary="Remove Upvote",
+    description="Remove upvote from a community post.",
+)
+async def remove_upvote(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove upvote from a post."""
+    service = CommunityPostService(db)
+    service.remove_upvote(post_id, current_user.id)
+    return {"message": "Upvote removed"}

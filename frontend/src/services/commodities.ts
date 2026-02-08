@@ -1,104 +1,115 @@
-import api from '@/lib/api';
-import { Commodity } from '@/types';
+import api, { apiWithLongTimeout } from '@/lib/api';
+import type {
+    Commodity,
+    CommodityWithPrice,
+    CommodityDetail,
+    CommoditiesWithPriceResponse
+} from '@/types';
 
-export interface CommodityResponse {
-    id: string;
-    name: string;
-    name_local?: string;
-    category?: string;
-    unit?: string;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface CommodityWithPrice {
-    id: string;
-    name: string;
-    price: number;
-    change: number;
-    mandi: string;
-    icon: string;
+export interface CommodityFilters {
+    search?: string;
+    categories?: string[];
+    minPrice?: number;
+    maxPrice?: number;
+    trend?: 'rising' | 'falling' | 'stable';
+    inSeason?: boolean;
+    sortBy?: 'name' | 'price' | 'change';
+    sortOrder?: 'asc' | 'desc';
+    skip?: number;
+    limit?: number;
 }
 
 export const commoditiesService = {
-    async getAll(params?: { category?: string; limit?: number }): Promise<Commodity[]> {
-        console.log('[CommoditiesService] getAll called with params:', params);
-        try {
-            const response = await api.get('/commodities', { params });
-            console.log('[CommoditiesService] Response received:', response.data?.length || 0, 'items');
-            return response.data.map((commodity: any) => ({
-                id: commodity.id,
-                name: commodity.name,
-                name_local: commodity.name_local,
-                category: commodity.category || 'Uncategorized',
-                unit: commodity.unit || 'kg',
-                // These would come from price data in a real implementation
-                latest_price: Math.floor(Math.random() * 5000) + 100,
-                price_change: (Math.random() * 20) - 10,
-                mandi: ['Kochi', 'Thrissur', 'Ernakulam', 'Kozhikode', 'Palakkad'][Math.floor(Math.random() * 5)]
-            }));
-        } catch (error) {
-            console.error('[CommoditiesService] Error fetching commodities:', error);
-            throw error;
-        }
-    },
-
-    async getById(id: string): Promise<CommodityResponse> {
-        const response = await api.get(`/commodities/${id}`);
+    /**
+     * Get all commodities (basic list)
+     */
+    async getAll(options?: { limit?: number }): Promise<Commodity[]> {
+        const params = new URLSearchParams();
+        if (options?.limit) params.append('limit', options.limit.toString());
+        const queryString = params.toString();
+        const url = queryString ? `/commodities/?${queryString}` : '/commodities/';
+        const response = await api.get<Commodity[]>(url);
         return response.data;
     },
 
+    /**
+     * Get all unique categories
+     */
+    async getCategories(): Promise<string[]> {
+        const response = await api.get<string[]>('/commodities/categories');
+        return response.data;
+    },
+
+    /**
+     * Get commodities with price data and advanced filtering
+     */
+    async getWithPrices(filters: CommodityFilters = {}): Promise<CommoditiesWithPriceResponse> {
+        const params = new URLSearchParams();
+
+        if (filters.skip !== undefined) params.append('skip', filters.skip.toString());
+        if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.categories?.length) params.append('categories', filters.categories.join(','));
+        if (filters.minPrice !== undefined) params.append('min_price', filters.minPrice.toString());
+        if (filters.maxPrice !== undefined) params.append('max_price', filters.maxPrice.toString());
+        if (filters.trend) params.append('trend', filters.trend);
+        if (filters.inSeason !== undefined) params.append('in_season', filters.inSeason.toString());
+        if (filters.sortBy) params.append('sort_by', filters.sortBy);
+        if (filters.sortOrder) params.append('sort_order', filters.sortOrder);
+
+        const queryString = params.toString();
+        const url = queryString ? `/commodities/with-prices?${queryString}` : '/commodities/with-prices';
+
+        const response = await api.get<CommoditiesWithPriceResponse>(url);
+        return response.data;
+    },
+
+    /**
+     * Get detailed commodity information (uses longer timeout for heavy queries)
+     */
+    async getDetails(commodityId: string): Promise<CommodityDetail> {
+        const response = await apiWithLongTimeout.get<CommodityDetail>(`/commodities/${commodityId}/details`);
+        return response.data;
+    },
+
+    /**
+     * Compare multiple commodities
+     */
+    async compare(commodityIds: string[]): Promise<{ commodities: CommodityDetail[]; comparison_date: string }> {
+        const response = await api.post<{ commodities: CommodityDetail[]; comparison_date: string }>(
+            '/commodities/compare',
+            commodityIds
+        );
+        return response.data;
+    },
+
+    /**
+     * Get a single commodity by ID
+     */
+    async getById(id: string): Promise<Commodity> {
+        const response = await api.get<Commodity>(`/commodities/${id}`);
+        return response.data;
+    },
+
+    /**
+     * Search commodities by name
+     */
+    async search(query: string, limit: number = 10): Promise<Commodity[]> {
+        const response = await api.get<Commodity[]>(
+            `/commodities/search/?q=${encodeURIComponent(query)}&limit=${limit}`
+        );
+        return response.data;
+    },
+
+    /**
+     * Get top commodities by highest price
+     */
     async getTopCommodities(limit: number = 5): Promise<CommodityWithPrice[]> {
-        const response = await api.get('/commodities', {
-            params: { limit }
+        const response = await this.getWithPrices({
+            sortBy: 'price',
+            sortOrder: 'desc',
+            limit,
         });
-
-        // Transform commodities to include mock price data
-        // In a real app, we'd fetch prices from /prices endpoint
-        return response.data.map((commodity: CommodityResponse, index: number) => ({
-            id: commodity.id,
-            name: commodity.name,
-            price: getBasePrice(commodity.name),
-            change: (Math.random() * 20 - 10).toFixed(1),
-            mandi: getRandomMandi(),
-            icon: getIconForCommodity(commodity.name)
-        }));
-    }
+        return response.commodities;
+    },
 };
-
-function getIconForCommodity(name: string): string {
-    const icons: { [key: string]: string } = {
-        'rice': '🌾',
-        'wheat': '🌾',
-        'tomato': '🍅',
-        'onion': '🧅',
-        'potato': '🥔',
-        'banana': '🍌',
-        'coconut': '🥥',
-        'cardamom': '🌿',
-        'pepper': '🌶️',
-        'rubber': '🌳',
-    };
-    return icons[name.toLowerCase()] || '🌱';
-}
-
-function getBasePrice(name: string): number {
-    const prices: { [key: string]: number } = {
-        'rice': 3250,
-        'wheat': 2890,
-        'tomato': 45,
-        'onion': 35,
-        'potato': 28,
-        'banana': 60,
-        'coconut': 25,
-        'cardamom': 2500,
-        'pepper': 450,
-        'rubber': 150,
-    };
-    return prices[name.toLowerCase()] || 100;
-}
-
-function getRandomMandi(): string {
-    const mandis = ['Kochi', 'Thrissur', 'Ernakulam', 'Kozhikode', 'Palakkad'];
-    return mandis[Math.floor(Math.random() * mandis.length)];
-}

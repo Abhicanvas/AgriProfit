@@ -710,7 +710,8 @@ All timestamps are in ISO 8601 format with UTC timezone: `2026-01-19T10:30:00Z`
         "transport_cost": 1625.00,
         "net_revenue": 145875.00,
         "net_gain_over_local": 3375.00,
-        "recommendation": "recommended"
+        "recommendation": "recommended",
+        "vehicle_type": "TRUCK_SMALL"
       },
       {
         "district": {"code": "KL-TVM", "name": "Thiruvananthapuram"},
@@ -720,7 +721,8 @@ All timestamps are in ISO 8601 format with UTC timezone: `2026-01-19T10:30:00Z`
         "transport_cost": 4300.00,
         "net_revenue": 141700.00,
         "net_gain_over_local": -800.00,
-        "recommendation": "not_recommended"
+        "recommendation": "not_recommended",
+        "vehicle_type": "TRUCK_LARGE"
       }
     ],
     "best_option": {
@@ -736,7 +738,13 @@ All timestamps are in ISO 8601 format with UTC timezone: `2026-01-19T10:30:00Z`
 | Field | Type | Description |
 |-------|------|-------------|
 | `recommendation` | string | `recommended` or `not_recommended` |
+| `vehicle_type` | string | `TEMPO`, `TRUCK_SMALL`, `TRUCK_LARGE` |
 | `best_option` | object | District with highest net gain (null if none profitable) |
+
+**Vehicle Selection Logic:**
+- `TEMPO`: Quantity <= 2000 kg
+- `TRUCK_SMALL`: Quantity <= 5000 kg
+- `TRUCK_LARGE`: Quantity > 5000 kg
 
 ---
 

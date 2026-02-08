@@ -15,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import (
     CheckConstraint,
     Index,
+    Integer,
     String,
     Text,
     TIMESTAMP,
@@ -45,6 +46,21 @@ class User(Base):
         nullable=False,
     )
 
+    name: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    age: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    state: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
     district: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
@@ -54,6 +70,11 @@ class User(Base):
         String(10),
         nullable=False,
         server_default=text("'en'"),
+    )
+
+    is_profile_complete: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default=text("FALSE"),
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -78,6 +99,16 @@ class User(Base):
         nullable=True,
     )
 
+    is_banned: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default=text("FALSE"),
+    )
+
+    ban_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     community_posts: Mapped[list["CommunityPost"]] = relationship(
         "CommunityPost",
         back_populates="user",
@@ -94,6 +125,19 @@ class User(Base):
         "AdminAction",
         back_populates="admin",
         foreign_keys="[AdminAction.admin_id]",
+    )
+
+    # Security-related relationships
+    uploaded_files: Mapped[list["UploadedFile"]] = relationship(
+        "UploadedFile",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (

@@ -226,7 +226,7 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         # Log warning for repeated failures
         if failure_count >= 3:
             self.security_logger.warning(
-                f"Multiple auth failures from IP",
+                "Multiple auth failures from IP",
                 extra={
                     "event": "auth_failure_threshold",
                     "client_ip": client_ip,

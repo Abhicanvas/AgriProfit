@@ -14,6 +14,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # Typed sub-models for better type safety
+class WeeklyPriceTrend(BaseModel):
+    """Daily average price for weekly trends chart."""
+    
+    day: str = Field(..., description="Day abbreviation (S, M, T, W, T, F, S)")
+    date: str = Field(..., description="Full date (YYYY-MM-DD)")
+    value: float = Field(..., description="Average price for that day")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MandiPriceItem(BaseModel):
     """Price data for a specific mandi."""
 
@@ -104,7 +114,7 @@ class PriceStatisticsResponse(BaseModel):
 
     commodity_id: UUID
     commodity_name: str | None = None
-    mandi_id: UUID
+    mandi_id: UUID | None = None
     mandi_name: str | None = None
     avg_price: float = Field(..., description="Average price")
     min_price: float = Field(..., description="Minimum price")
@@ -123,10 +133,12 @@ class MarketSummaryResponse(BaseModel):
     total_commodities: int = Field(..., description="Total number of commodities")
     total_mandis: int = Field(..., description="Total number of mandis")
     total_price_records: int = Field(..., description="Total price history records")
-    total_forecasts: int = Field(..., description="Total forecast records")
+    total_forecasts: int = Field(..., description="Total future forecast records")
     total_posts: int = Field(..., description="Total community posts")
     total_users: int = Field(..., description="Total registered users")
     last_updated: datetime = Field(..., description="Timestamp of last data update")
+    data_is_stale: bool = Field(False, description="True if data is more than 24 hours old")
+    hours_since_update: float = Field(0.0, description="Hours since last price update")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -244,6 +256,7 @@ class DashboardResponse(BaseModel):
     recent_price_changes: list[PriceStatisticsResponse] = Field(..., description="Recent price movements")
     top_commodities: list[TopCommodityItem] = Field(..., description="Most active commodities")
     top_mandis: list[TopMandiItem] = Field(..., description="Most active mandis")
+    weekly_trends: list[WeeklyPriceTrend] = Field(..., description="Last 7 days average prices")
 
     model_config = ConfigDict(
         from_attributes=True,

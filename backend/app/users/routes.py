@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models import User
-from app.users.schemas import UserResponse, UserUpdate
+from app.users.schemas import UserResponse, UserUpdate, PhoneNumberUpdate
 from app.users.service import UserService
 from app.auth.security import get_current_user, require_role
 from app.core.rate_limit import limiter, RATE_LIMIT_READ, RATE_LIMIT_WRITE
@@ -156,6 +156,117 @@ async def update_current_user_profile(
 
     updated_user = service.update_user(current_user, user_data)
     return updated_user
+
+
+@router.put(
+    "/me/phone",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Phone Number",
+    description="Update the authenticated user's phone number with OTP verification.",
+    responses={
+        200: {
+            "description": "Phone number updated successfully",
+            "model": UserResponse,
+        },
+        400: {
+            "description": "Validation error or phone number already exists",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_otp": {
+                            "summary": "Invalid or expired OTP",
+                            "value": {"detail": "Invalid or expired OTP"}
+                        },
+                        "phone_exists": {
+                            "summary": "Phone number already registered",
+                            "value": {"detail": "Phone number already registered"}
+                        },
+                        "same_phone": {
+                            "summary": "Same as current phone",
+                            "value": {"detail": "New phone number must be different from current"}
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+    }
+)
+async def update_phone_number(
+    phone_data: PhoneNumberUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    """
+    Update the current user's phone number.
+
+    Requires OTP verification on the new phone number. Process:
+    1. User requests OTP for new phone via /auth/request-otp
+    2. User receives OTP on new phone
+    3. User submits this endpoint with new phone, OTP, and request_id
+    4. System verifies OTP and updates phone number
+
+    Args:
+        phone_data: PhoneNumberUpdate with new phone, OTP, and request_id
+        db: Database session (injected)
+        current_user: Authenticated user (from JWT token)
+
+    Returns:
+        UserResponse with updated phone number
+
+    Raises:
+        HTTPException 400: Invalid OTP, phone already exists, or validation failed
+        HTTPException 401: Not authenticated
+    """
+    from app.auth.service import AuthService
+    
+    service = UserService(db)
+    auth_service = AuthService(db)
+
+    # Check if new phone is different from current
+    if phone_data.new_phone_number == current_user.phone_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New phone number must be different from current",
+        )
+
+    # Check if new phone number already exists
+    existing_user = service.get_by_phone(phone_data.new_phone_number)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phone number already registered",
+        )
+
+    # Verify OTP for new phone number
+    try:
+        auth_service.verify_otp(
+            phone_data.request_id,
+            phone_data.otp,
+            phone_data.new_phone_number
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to verify OTP",
+        )
+
+    # Update phone number
+    current_user.phone_number = phone_data.new_phone_number
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
 
 
 # =============================================================================
@@ -361,6 +472,8 @@ async def delete_user(
 
     Performs a soft delete by setting the deleted_at timestamp.
     The user's data is preserved but they can no longer log in.
+    
+    Admins cannot delete themselves to preserve audit trail.
 
     Args:
         user_id: UUID of the user to delete
@@ -368,10 +481,18 @@ async def delete_user(
         current_user: Admin user (from JWT token)
 
     Raises:
+        HTTPException 400: Cannot delete own account
         HTTPException 401: Not authenticated
         HTTPException 403: Not an admin
         HTTPException 404: User not found
     """
+    # Prevent self-deletion
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+    
     service = UserService(db)
     deleted = service.soft_delete(user_id)
     if not deleted:

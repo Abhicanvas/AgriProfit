@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -19,8 +19,8 @@ def create_test_user(
         phone_number=phone_number,
         role=role,
         district=district,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(user)
     db.commit()
@@ -56,8 +56,8 @@ def create_test_commodity(
         name_local=name_local,
         category=category,
         unit=unit,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(commodity)
     db.commit()
@@ -80,8 +80,8 @@ def create_test_mandi(
         state=state,
         market_code=market_code or f"MKT-{uuid4().hex[:8].upper()}",
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(mandi)
     db.commit()

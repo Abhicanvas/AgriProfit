@@ -109,11 +109,11 @@ class PriceForecastResponse(BaseModel):
 
     id: UUID = Field(..., description="Unique forecast identifier")
     commodity_id: UUID = Field(..., description="Commodity ID")
-    mandi_id: UUID = Field(..., description="Mandi ID")
+    mandi_id: UUID | None = Field(default=None, description="Mandi ID (optional)")
     forecast_date: date = Field(..., description="Forecast target date")
     predicted_price: float = Field(..., description="Predicted price (Rs.)")
-    confidence_level: float = Field(..., description="Confidence score (0-1)")
-    model_version: str = Field(..., description="ML model version")
+    confidence_level: float | None = Field(default=None, description="Confidence score (0-1)")
+    model_version: str | None = Field(default=None, description="ML model version")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

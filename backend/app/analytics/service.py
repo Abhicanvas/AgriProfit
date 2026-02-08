@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func, desc
@@ -156,7 +156,7 @@ class AnalyticsService:
         return PriceStatisticsResponse(
             commodity_id=result.commodity_id,
             commodity_name=result.commodity_name,
-            mandi_id=mandi_id or result.commodity_id,  # Fallback
+            mandi_id=mandi_id,  # Keep as None if not provided
             mandi_name=getattr(result, "mandi_name", None),
             avg_price=round(float(result.avg_price), 2),
             min_price=round(float(result.min_price), 2),
@@ -202,7 +202,11 @@ class AnalyticsService:
         total_commodities = self.db.query(func.count(Commodity.id)).scalar() or 0
         total_mandis = self.db.query(func.count(Mandi.id)).scalar() or 0
         total_price_records = self.db.query(func.count(PriceHistory.id)).scalar() or 0
-        total_forecasts = self.db.query(func.count(PriceForecast.id)).scalar() or 0
+        # Only count future forecasts (today and onwards)
+        today = date.today()
+        total_forecasts = self.db.query(func.count(PriceForecast.id)).filter(
+            PriceForecast.forecast_date >= today
+        ).scalar() or 0
 
         # Count non-deleted posts
         total_posts = self.db.query(func.count(CommunityPost.id)).filter(
@@ -216,7 +220,27 @@ class AnalyticsService:
             PriceHistory.created_at.desc()
         ).first()
 
-        last_updated = last_price[0] if last_price else datetime.utcnow()
+        last_updated = last_price[0] if last_price else datetime.now(timezone.utc)
+        
+        # Handle timezone-naive timestamps from database
+        # Database stores local time without timezone info
+        if last_updated.tzinfo is None:
+            # Treat as local time and convert to UTC-aware
+            from datetime import timedelta
+            import time
+            
+            # Get local timezone offset in hours
+            local_offset = time.timezone if not time.daylight else time.altzone
+            local_offset_hours = -local_offset / 3600
+            
+            # Mark as UTC and adjust by the local offset
+            last_updated = last_updated.replace(tzinfo=timezone.utc)
+            last_updated = last_updated - timedelta(hours=local_offset_hours)
+        
+        # Calculate data freshness
+        now = datetime.now(timezone.utc)
+        hours_since_update = (now - last_updated).total_seconds() / 3600
+        data_is_stale = hours_since_update > 24
 
         return MarketSummaryResponse(
             total_commodities=total_commodities,
@@ -226,6 +250,8 @@ class AnalyticsService:
             total_posts=total_posts,
             total_users=total_users,
             last_updated=last_updated,
+            data_is_stale=data_is_stale,
+            hours_since_update=round(hours_since_update, 1),
         )
 
     def get_top_commodities_by_price_change(
@@ -233,30 +259,75 @@ class AnalyticsService:
         limit: int = 10,
         days: int = 30,
     ) -> list[TopCommodityItem]:
-        """Get commodities with highest price change percentage."""
-        commodities = self.db.query(Commodity).all()
-
+        """Get commodities with highest price change percentage (Optimized)."""
+        start_date = date.today() - timedelta(days=days)
+        
+        # 1. Get commodities that actually have data in the period
+        # We need first and last price for each commodity
+        
+        # Subquery for first date per commodity
+        first_dates = self.db.query(
+            PriceHistory.commodity_id,
+            func.min(PriceHistory.price_date).label("min_date")
+        ).filter(
+            PriceHistory.price_date >= start_date
+        ).group_by(PriceHistory.commodity_id).subquery()
+        
+        # Subquery for last date per commodity
+        last_dates = self.db.query(
+            PriceHistory.commodity_id,
+            func.max(PriceHistory.price_date).label("max_date")
+        ).filter(
+            PriceHistory.price_date >= start_date
+        ).group_by(PriceHistory.commodity_id).subquery()
+        
+        # Get prices at those dates
+        # This is a bit complex in pure ORM, so we might iterate over likely candidates
+        # But let's try a simpler approach: 
+        # Get all commodities with significant activity first
+        
+        active_commodities = self.db.query(
+            PriceHistory.commodity_id,
+            func.count(PriceHistory.id).label("cnt")
+        ).filter(
+            PriceHistory.price_date >= start_date
+        ).group_by(
+            PriceHistory.commodity_id
+        ).having(func.count(PriceHistory.id) >= 2).all()
+        
         commodity_changes = []
-        for commodity in commodities:
-            price_change = self._calculate_price_change(
-                commodity_id=commodity.id,
-                days=days,
-            )
-            record_count = self.db.query(func.count(PriceHistory.id)).filter(
-                PriceHistory.commodity_id == commodity.id,
-            ).scalar() or 0
-
-            if record_count > 0:
+        
+        # Only iterate over commodities with data (much smaller set)
+        for row in active_commodities:
+            commodity_id = row.commodity_id
+            
+            # Efficiently get just first and last price
+            first_price = self.db.query(PriceHistory.modal_price).filter(
+                PriceHistory.commodity_id == commodity_id,
+                PriceHistory.price_date >= start_date
+            ).order_by(PriceHistory.price_date.asc()).limit(1).scalar()
+            
+            last_price = self.db.query(PriceHistory.modal_price).filter(
+                PriceHistory.commodity_id == commodity_id,
+                PriceHistory.price_date >= start_date
+            ).order_by(PriceHistory.price_date.desc()).limit(1).scalar()
+            
+            if first_price and last_price and first_price > 0:
+                change = abs(((float(last_price) - float(first_price)) / float(first_price)) * 100)
+                
+                # Get name efficiently (could simplify by joining above, but this is fine)
+                name = self.db.query(Commodity.name).filter(Commodity.id == commodity_id).scalar()
+                
                 commodity_changes.append({
-                    "commodity_id": commodity.id,
-                    "name": commodity.name,
-                    "record_count": record_count,
-                    "price_change": abs(price_change),
+                    "commodity_id": commodity_id,
+                    "name": name,
+                    "record_count": row.cnt,
+                    "price_change": change,
                 })
-
-        # Sort by absolute price change and take top N
+        
+        # Sort and limit
         commodity_changes.sort(key=lambda x: x["price_change"], reverse=True)
-
+        
         return [
             TopCommodityItem(
                 commodity_id=item["commodity_id"],
@@ -327,7 +398,7 @@ class AnalyticsService:
 
         return UserActivityResponse(
             user_id=user.id,
-            username=user.name if hasattr(user, 'name') else None,
+            username=getattr(user, 'name', None),
             phone=user.phone_number,
             posts_count=posts_count,
             notifications_count=notifications_count,
@@ -395,11 +466,48 @@ class AnalyticsService:
             price_spread=round(price_spread, 2),
         )
 
+    def get_weekly_price_trends(self) -> list:
+        """Get average prices for the last 7 days that have data for dashboard chart."""
+        from datetime import datetime
+        
+        # Get the last 7 distinct dates that have price data
+        dates_with_data = self.db.query(
+            PriceHistory.price_date,
+            func.avg(PriceHistory.modal_price).label('avg_price')
+        ).group_by(
+            PriceHistory.price_date
+        ).order_by(
+            PriceHistory.price_date.desc()
+        ).limit(7).all()
+        
+        # Reverse to get chronological order
+        dates_with_data = list(reversed(dates_with_data))
+        
+        day_names = ["M", "T", "W", "T", "F", "S", "S"]
+        weekly_data = []
+        
+        for date_record in dates_with_data:
+            target_date = date_record.price_date
+            avg_price = date_record.avg_price
+            
+            # Convert to quintal if needed (prices < 200 are in kg)
+            if avg_price and avg_price < 200:
+                avg_price = avg_price * 100
+            
+            weekly_data.append({
+                "day": day_names[target_date.weekday()],
+                "date": str(target_date),
+                "value": round(float(avg_price), 2) if avg_price else 0
+            })
+        
+        return weekly_data
+
     def get_dashboard(self) -> DashboardResponse:
         """Get combined dashboard data."""
         market_summary = self.get_market_summary()
         top_commodities = self.get_top_commodities_by_price_change(limit=5, days=7)
         top_mandis = self.get_top_mandis_by_records(limit=5)
+        weekly_trends = self.get_weekly_price_trends()
 
         # Get recent price changes for top commodities
         recent_price_changes = []
@@ -416,4 +524,5 @@ class AnalyticsService:
             recent_price_changes=recent_price_changes,
             top_commodities=top_commodities,
             top_mandis=top_mandis,
+            weekly_trends=weekly_trends,
         )

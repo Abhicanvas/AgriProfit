@@ -195,3 +195,20 @@ class PriceTrendResponse(BaseModel):
             }
         }
     )
+
+
+class CurrentPriceResponse(BaseModel):
+    """Schema for current market price list item."""
+
+    id: UUID
+    commodity_id: UUID
+    commodity: str
+    mandi_name: str
+    state: str
+    district: str
+    price_per_kg: float
+    change_percent: float = 0.0
+    change_amount: float = 0.0
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

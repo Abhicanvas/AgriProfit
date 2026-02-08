@@ -93,6 +93,12 @@ class PriceHistory(Base):
         passive_deletes=True,
     )
 
+    mandi: Mapped["Mandi"] = relationship(
+        "Mandi",
+        back_populates="price_history",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         CheckConstraint(
             "modal_price >= 0",

@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import { AuthResponse } from '@/types';
+import { AuthResponse, ProfileData, User } from '@/types';
 
 export const authService = {
     requestOtp: async (phoneNumber: string) => {
@@ -17,13 +17,20 @@ export const authService = {
         return response.data;
     },
 
-    getCurrentUser: async () => {
-        const response = await api.get('/users/me');
+    completeProfile: async (profileData: ProfileData): Promise<User> => {
+        const response = await api.post('/auth/complete-profile', profileData);
+        return response.data;
+    },
+
+    getCurrentUser: async (): Promise<User> => {
+        const response = await api.get('/auth/me');
         return response.data;
     },
 
     logout: () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+        }
     },
 };

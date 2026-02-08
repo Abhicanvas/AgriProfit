@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 console.log('[API] Initializing axios with baseURL:', baseURL);
 
@@ -9,7 +9,15 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000, // 10 second timeout
+    timeout: 60000, // 60 second timeout (increased for database queries)
+});
+
+export const apiWithLongTimeout = axios.create({
+    baseURL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    timeout: 120000, // 2 minute timeout for slow endpoints
 });
 
 api.interceptors.request.use((config) => {
@@ -35,6 +43,9 @@ api.interceptors.response.use(
     },
     (error) => {
         console.error('[API] Response error:', error.message, error.config?.url);
+        if (error.response && error.response.data) {
+            console.error('[API] Error details:', error.response.data);
+        }
 
         if (error.response?.status === 401 && typeof window !== 'undefined') {
             localStorage.removeItem('token');

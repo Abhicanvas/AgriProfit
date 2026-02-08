@@ -9,11 +9,12 @@ This module provides endpoints for:
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models import User
+from app.models.community_post import CommunityPost
 from app.admin.schemas import (
     AdminActionCreate,
     AdminActionResponse,
@@ -25,10 +26,176 @@ from app.auth.security import require_role
 from app.core.rate_limit import limiter, RATE_LIMIT_READ, RATE_LIMIT_WRITE
 from app.core.logging_config import log_admin_action
 
-router = APIRouter(prefix="/admin/actions", tags=["Admin"])
+router = APIRouter(prefix="/admin", tags=["Admin"])
+
+# Dashboard Management Endpoints
+@router.get(
+    "/stats",
+    summary="Get Admin Dashboard Stats",
+    description="Get statistics for admin dashboard",
+)
+async def get_admin_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Get dashboard statistics."""
+    total_users = db.query(User).count()
+    banned_users = db.query(User).filter(User.is_banned == True).count()
+    total_posts = db.query(CommunityPost).count()
+    active_users = db.query(User).filter(User.is_banned == False).count()
+    
+    return {
+        "total_users": total_users,
+        "total_posts": total_posts,
+        "banned_users": banned_users,
+        "active_users": active_users,
+    }
 
 
-@router.post(
+@router.get(
+    "/users",
+    summary="Get All Users",
+    description="Get list of all users with optional search",
+)
+async def get_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+    search: str = Query(default="", description="Search by name, phone, or location"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    """Get all users with search."""
+    query = db.query(User)
+    
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            (User.name.ilike(search_filter)) |
+            (User.phone_number.ilike(search_filter)) |
+            (User.district.ilike(search_filter))
+        )
+    
+    users = query.offset(skip).limit(limit).all()
+    
+    return [{
+        "id": str(user.id),
+        "name": user.name,
+        "phone": user.phone_number,
+        "location": f"{user.district}, {user.state}" if user.district and user.state else (user.district or user.state or ""),
+        "role": user.role,
+        "is_banned": user.is_banned,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    } for user in users]
+
+
+@router.get(
+    "/posts",
+    summary="Get All Posts",
+    description="Get list of all community posts with optional search",
+)
+async def get_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+    search: str = Query(default="", description="Search by title or author"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    """Get all posts with search."""
+    query = db.query(CommunityPost)
+    
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            (CommunityPost.title.ilike(search_filter)) |
+            (CommunityPost.content.ilike(search_filter))
+        )
+    
+    posts = query.offset(skip).limit(limit).all()
+    
+    return [{
+        "id": str(post.id),
+        "title": post.title,
+        "content": post.content,
+        "category": post.post_type,  # post_type, not category
+        "author_id": str(post.user_id),
+        "author_name": post.user.name if post.user else "Unknown",
+        "likes_count": post.likes_count,
+        "comments_count": post.replies_count,  # replies_count, not comments_count
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+    } for post in posts]
+
+
+@router.put(
+    "/users/{user_id}/ban",
+    summary="Ban User",
+    description="Ban a user from the platform",
+)
+async def ban_user(
+    user_id: UUID,
+    reason: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Ban a user."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_banned = True
+    user.ban_reason = reason.get("reason", "No reason provided")
+    db.commit()
+    
+    return {"message": "User banned successfully"}
+
+
+@router.put(
+    "/users/{user_id}/unban",
+    summary="Unban User",
+    description="Unban a previously banned user",
+)
+async def unban_user(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Unban a user."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_banned = False
+    user.ban_reason = None
+    db.commit()
+    
+    return {"message": "User unbanned successfully"}
+
+
+@router.delete(
+    "/posts/{post_id}",
+    summary="Delete Post",
+    description="Delete a community post",
+)
+async def delete_post(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Delete a post."""
+    post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    db.delete(post)
+    db.commit()
+    
+    return {"message": "Post deleted successfully"}
+
+
+# Admin Actions Audit Log Endpoints
+actions_router = APIRouter(prefix="/actions", tags=["Admin"])
+
+
+@actions_router.post(
     "/",
     response_model=AdminActionResponse,
     status_code=status.HTTP_201_CREATED,
@@ -44,6 +211,7 @@ router = APIRouter(prefix="/admin/actions", tags=["Admin"])
 @limiter.limit(RATE_LIMIT_WRITE)
 async def create_admin_action(
     request: Request,
+    response: Response,
     action_data: AdminActionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
@@ -75,7 +243,7 @@ async def create_admin_action(
         )
 
 
-@router.get(
+@actions_router.get(
     "/summary",
     response_model=dict,
     status_code=status.HTTP_200_OK,
@@ -99,7 +267,7 @@ async def get_action_summary(
     return {"summary": summary}
 
 
-@router.get(
+@actions_router.get(
     "/recent",
     response_model=list[AdminActionResponse],
     status_code=status.HTTP_200_OK,
@@ -122,7 +290,7 @@ async def get_recent_actions(
     return actions
 
 
-@router.get(
+@actions_router.get(
     "/user/{user_id}",
     response_model=list[AdminActionResponse],
     status_code=status.HTTP_200_OK,
@@ -151,7 +319,7 @@ async def get_user_admin_actions(
     return actions
 
 
-@router.get(
+@actions_router.get(
     "/resource/{resource_id}",
     response_model=list[AdminActionResponse],
     status_code=status.HTTP_200_OK,
@@ -180,7 +348,7 @@ async def get_resource_admin_actions(
     return actions
 
 
-@router.get(
+@actions_router.get(
     "/type/{action_type}",
     response_model=list[AdminActionResponse],
     status_code=status.HTTP_200_OK,
@@ -216,7 +384,7 @@ async def get_actions_by_type(
     return actions
 
 
-@router.get(
+@actions_router.get(
     "/admin/{admin_id}",
     response_model=list[AdminActionResponse],
     status_code=status.HTTP_200_OK,
@@ -245,7 +413,7 @@ async def get_actions_by_admin(
     return actions
 
 
-@router.get(
+@actions_router.get(
     "/{action_id}",
     response_model=AdminActionResponse,
     status_code=status.HTTP_200_OK,
@@ -276,7 +444,7 @@ async def get_admin_action(
     return action
 
 
-@router.get(
+@actions_router.get(
     "/",
     response_model=AdminActionListResponse,
     status_code=status.HTTP_200_OK,
@@ -334,3 +502,7 @@ async def list_admin_actions(
         skip=skip,
         limit=limit,
     )
+
+
+# Include actions router as subrouter
+router.include_router(actions_router)

@@ -1,10 +1,15 @@
 import uuid as uuid_module
-from datetime import datetime
+from datetime import datetime, timezone, time
 from uuid import UUID
-from sqlalchemy import Boolean, Float, String, TIMESTAMP, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import Boolean, Float, String, TIMESTAMP, Time, Integer, text
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
+
+
+def utcnow() -> datetime:
+    """Return current UTC time (timezone-aware)."""
+    return datetime.now(timezone.utc)
 
 
 class Mandi(Base):
@@ -42,6 +47,7 @@ class Mandi(Base):
         unique=True,
     )
 
+    # Location coordinates
     latitude: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,
@@ -50,6 +56,95 @@ class Mandi(Base):
     longitude: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,
+    )
+
+    pincode: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
+    # Contact information
+    phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    email: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    website: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    # Operating hours
+    opening_time: Mapped[time | None] = mapped_column(
+        Time,
+        nullable=True,
+    )
+
+    closing_time: Mapped[time | None] = mapped_column(
+        Time,
+        nullable=True,
+    )
+
+    operating_days: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(20)),
+        nullable=True,
+        comment="Days of operation e.g. ['Monday', 'Tuesday', ...]",
+    )
+
+    # Facilities
+    has_weighbridge: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    has_storage: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    has_loading_dock: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    has_cold_storage: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    # Payment methods
+    payment_methods: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(50)),
+        nullable=True,
+        comment="Accepted payment methods e.g. ['Cash', 'UPI', 'Bank Transfer']",
+    )
+
+    # Commodities accepted
+    commodities_accepted: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(100)),
+        nullable=True,
+        comment="List of commodity names accepted at this mandi",
+    )
+
+    # Rating
+    rating: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    total_reviews: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
     )
 
     is_active: Mapped[bool] = mapped_column(
@@ -68,6 +163,14 @@ class Mandi(Base):
         TIMESTAMP,
         nullable=False,
         server_default=text("NOW()"),
+        onupdate=utcnow,
+    )
+
+    # Relationships
+    price_history: Mapped[list["PriceHistory"]] = relationship(
+        "PriceHistory",
+        back_populates="mandi",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

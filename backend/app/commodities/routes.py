@@ -65,6 +65,89 @@ async def create_commodity(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+@router.get(
+    "/",
+    response_model=list[CommodityResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Commodities",
+    description="List all commodities with pagination. Public endpoint.",
+    responses={
+        200: {"description": "List of commodities"},
+    }
+)
+async def list_commodities(
+    db: Session = Depends(get_db),
+    skip: int = Query(default=0, ge=0, description="Records to skip"),
+    limit: int = Query(default=100, ge=1, le=500, description="Max records to return"),
+) -> list[CommodityResponse]:
+    """
+    List all commodities with pagination.
+
+    Returns a paginated list of all commodities in the catalog.
+    Use this to populate dropdown selectors or browse the catalog.
+
+    Args:
+        db: Database session (injected)
+        skip: Number of records to skip (pagination offset)
+        limit: Maximum records to return (1-100)
+
+    Returns:
+        List of CommodityResponse objects
+    """
+    service = CommodityService(db)
+    commodities = service.get_all(skip=skip, limit=limit)
+    return commodities
+
+
+@router.get(
+    "/categories",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="List Commodity Categories",
+    description="Get all unique commodity categories.",
+)
+async def list_categories(
+    db: Session = Depends(get_db),
+) -> list[str]:
+    """Get all unique commodity categories."""
+    service = CommodityService(db)
+    return service.get_categories()
+
+
+@router.get(
+    "/with-prices",
+    status_code=status.HTTP_200_OK,
+    summary="List Commodities with Prices",
+    description="Get all commodities with current price data and advanced filtering.",
+)
+async def list_commodities_with_prices(
+    db: Session = Depends(get_db),
+    skip: int = Query(default=0, ge=0, description="Records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Max records"),
+    search: str | None = Query(default=None, description="Search term"),
+    categories: str | None = Query(default=None, description="Comma-separated categories"),
+    min_price: float | None = Query(default=None, description="Minimum price filter"),
+    max_price: float | None = Query(default=None, description="Maximum price filter"),
+    trend: str | None = Query(default=None, description="Trend filter: rising, falling, stable"),
+    in_season: bool | None = Query(default=None, description="Filter to in-season commodities"),
+    sort_by: str = Query(default="name", description="Sort by: name, price, change"),
+    sort_order: str = Query(default="asc", description="Sort order: asc, desc"),
+) -> dict:
+    """Get commodities with price data and advanced filtering."""
+    service = CommodityService(db)
+    category_list = categories.split(",") if categories else None
+    return service.get_all_with_prices(
+        skip=skip,
+        limit=limit,
+        search=search,
+        categories=category_list,
+        min_price=min_price,
+        max_price=max_price,
+        trend=trend,
+        in_season=in_season,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
 
 
 @router.get(
@@ -109,37 +192,49 @@ async def get_commodity(
 
 
 @router.get(
-    "/",
-    response_model=list[CommodityResponse],
+    "/{commodity_id}/details",
     status_code=status.HTTP_200_OK,
-    summary="List Commodities",
-    description="List all commodities with pagination. Public endpoint.",
-    responses={
-        200: {"description": "List of commodities"},
-    }
+    summary="Get Commodity Details",
+    description="Get detailed commodity info including price history and top mandis.",
 )
-async def list_commodities(
+async def get_commodity_details(
+    commodity_id: UUID,
     db: Session = Depends(get_db),
-    skip: int = Query(default=0, ge=0, description="Records to skip"),
-    limit: int = Query(default=100, ge=1, le=100, description="Max records to return"),
-) -> list[CommodityResponse]:
-    """
-    List all commodities with pagination.
-
-    Returns a paginated list of all commodities in the catalog.
-    Use this to populate dropdown selectors or browse the catalog.
-
-    Args:
-        db: Database session (injected)
-        skip: Number of records to skip (pagination offset)
-        limit: Maximum records to return (1-100)
-
-    Returns:
-        List of CommodityResponse objects
-    """
+) -> dict:
+    """Get detailed commodity information with price history."""
     service = CommodityService(db)
-    commodities = service.get_all(skip=skip, limit=limit)
-    return commodities
+    details = service.get_details(commodity_id)
+    if not details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Commodity not found",
+        )
+    return details
+
+
+@router.post(
+    "/compare",
+    status_code=status.HTTP_200_OK,
+    summary="Compare Commodities",
+    description="Compare up to 5 commodities side by side.",
+)
+async def compare_commodities(
+    commodity_ids: list[UUID],
+    db: Session = Depends(get_db),
+) -> dict:
+    """Compare multiple commodities."""
+    if len(commodity_ids) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least 2 commodities required for comparison",
+        )
+    if len(commodity_ids) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 commodities can be compared at once",
+        )
+    service = CommodityService(db)
+    return service.compare(commodity_ids)
 
 
 @router.get(

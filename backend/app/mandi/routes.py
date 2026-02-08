@@ -63,6 +63,202 @@ async def create_mandi(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.get(
+    "/",
+    response_model=list[MandiResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Mandis",
+    description="List all mandis with optional district filtering. Public endpoint.",
+    responses={200: {"description": "List of mandis"}},
+)
+async def list_mandis(
+    db: Session = Depends(get_db),
+    skip: int = Query(default=0, ge=0, description="Records to skip"),
+    limit: int = Query(default=100, ge=1, le=100, description="Max records"),
+    district: str | None = Query(default=None, description="Filter by district name"),
+) -> list[MandiResponse]:
+    """
+    List mandis with optional filtering.
+
+    Args:
+        db: Database session (injected)
+        skip: Pagination offset
+        limit: Max records to return
+        district: Optional district filter
+
+    Returns:
+        List of MandiResponse objects
+    """
+    service = MandiService(db)
+    mandis = service.get_all(skip=skip, limit=limit, district=district)
+    return mandis
+
+
+@router.get(
+    "/{mandi_id}/prices",
+    response_model=list[dict],
+    status_code=status.HTTP_200_OK,
+    summary="Get Mandi Prices",
+    description="Get current prices for all commodities available at a specific mandi. Public endpoint.",
+    responses={
+        200: {"description": "List of commodity prices at this mandi"},
+        404: {"description": "Mandi not found or no price data available"},
+    }
+)
+async def get_mandi_prices(
+    mandi_id: UUID,
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500, description="Max commodities to return"),
+) -> list[dict]:
+    """
+    Get current prices for all commodities at a mandi.
+    
+    Returns the latest price record for each commodity traded at this mandi.
+    
+    Args:
+        mandi_id: Mandi UUID
+        db: Database session
+        limit: Maximum number of prices to return
+    
+    Returns:
+        List of commodity prices with details
+    """
+    from app.models import PriceHistory, Commodity
+    from sqlalchemy import func
+    
+    # Verify mandi exists
+    service = MandiService(db)
+    mandi = service.get_by_id(mandi_id)
+    if not mandi:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Mandi not found"
+        )
+    
+    # Get latest price for each commodity at this mandi
+    # Using a subquery to get the max date for each commodity
+    subquery = (
+        db.query(
+            PriceHistory.commodity_id,
+            func.max(PriceHistory.price_date).label('max_date')
+        )
+        .filter(PriceHistory.mandi_id == mandi_id)
+        .group_by(PriceHistory.commodity_id)
+        .subquery()
+    )
+    
+    prices = (
+        db.query(PriceHistory, Commodity)
+        .join(Commodity, PriceHistory.commodity_id == Commodity.id)
+        .join(
+            subquery,
+            (PriceHistory.commodity_id == subquery.c.commodity_id) &
+            (PriceHistory.price_date == subquery.c.max_date)
+        )
+        .filter(PriceHistory.mandi_id == mandi_id)
+        .limit(limit)
+        .all()
+    )
+    
+    if not prices:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No price data available for this mandi"
+        )
+    
+    # Format response
+    return [
+        {
+            "commodity_id": str(commodity.id),
+            "commodity_name": commodity.name,
+            "commodity_category": commodity.category,
+            "price": price.modal_price,
+            "min_price": price.min_price,
+            "max_price": price.max_price,
+            "price_date": price.price_date.isoformat(),
+            "unit": "quintal",
+            "market": mandi.name,
+        }
+        for price, commodity in prices
+    ]
+
+
+@router.get(
+    "/states",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="List States",
+    description="Get all states with mandis.",
+)
+async def list_states(
+    db: Session = Depends(get_db),
+) -> list[str]:
+    """Get all unique states with mandis."""
+    service = MandiService(db)
+    return service.get_states()
+
+
+@router.get(
+    "/districts",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="List Districts by State",
+    description="Get all districts in a specific state.",
+)
+async def list_districts(
+    state: str = Query(..., description="State name"),
+    db: Session = Depends(get_db),
+) -> list[str]:
+    """Get all districts in a state."""
+    service = MandiService(db)
+    return service.get_districts_by_state(state)
+
+
+@router.get(
+    "/with-filters",
+    status_code=status.HTTP_200_OK,
+    summary="List Mandis with Advanced Filters",
+    description="Get all mandis with advanced filtering, distance calculation, and prices.",
+)
+async def list_mandis_with_filters(
+    db: Session = Depends(get_db),
+    skip: int = Query(default=0, ge=0, description="Records to skip"),
+    limit: int = Query(default=50, ge=1, le=2000, description="Max records"),
+    search: str | None = Query(default=None, description="Search term"),
+    states: str | None = Query(default=None, description="Comma-separated states"),
+    district: str | None = Query(default=None, description="District filter"),
+    commodity: str | None = Query(default=None, description="Filter by commodity accepted"),
+    max_distance_km: float | None = Query(default=None, description="Max distance from user"),
+    user_lat: float | None = Query(default=None, description="User latitude"),
+    user_lon: float | None = Query(default=None, description="User longitude"),
+    user_district: str | None = Query(default=None, description="User's district"),
+    user_state: str | None = Query(default=None, description="User's state"),
+    has_facility: str | None = Query(default=None, description="Facility: weighbridge, storage, loading_dock, cold_storage"),
+    min_rating: float | None = Query(default=None, description="Minimum rating"),
+    sort_by: str = Query(default="name", description="Sort by: name, distance, rating"),
+    sort_order: str = Query(default="asc", description="Sort order: asc, desc"),
+) -> dict:
+    """Get mandis with advanced filtering and distance from user."""
+    service = MandiService(db)
+    state_list = states.split(",") if states else None
+    return service.get_all_with_filters(
+        skip=skip,
+        limit=limit,
+        search=search,
+        states=state_list,
+        district=district,
+        commodity=commodity,
+        max_distance_km=max_distance_km,
+        user_lat=user_lat,
+        user_lon=user_lon,
+        user_district=user_district,
+        user_state=user_state,
+        has_facility=has_facility,
+        min_rating=min_rating,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+
 
 @router.get(
     "/{mandi_id}",
@@ -100,34 +296,63 @@ async def get_mandi(
 
 
 @router.get(
-    "/",
-    response_model=list[MandiResponse],
+    "/{mandi_id}/details",
     status_code=status.HTTP_200_OK,
-    summary="List Mandis",
-    description="List all mandis with optional district filtering. Public endpoint.",
-    responses={200: {"description": "List of mandis"}},
+    summary="Get Mandi Details",
+    description="Get detailed mandi info including prices and facilities.",
 )
-async def list_mandis(
+async def get_mandi_details(
+    mandi_id: UUID,
+    user_lat: float | None = Query(default=None, description="User latitude for distance"),
+    user_lon: float | None = Query(default=None, description="User longitude for distance"),
+    user_district: str | None = Query(default=None, description="User's district"),
+    user_state: str | None = Query(default=None, description="User's state"),
     db: Session = Depends(get_db),
-    skip: int = Query(default=0, ge=0, description="Records to skip"),
-    limit: int = Query(default=100, ge=1, le=100, description="Max records"),
-    district: str | None = Query(default=None, description="Filter by district name"),
-) -> list[MandiResponse]:
-    """
-    List mandis with optional filtering.
-
-    Args:
-        db: Database session (injected)
-        skip: Pagination offset
-        limit: Max records to return
-        district: Optional district filter
-
-    Returns:
-        List of MandiResponse objects
-    """
+) -> dict:
+    """Get detailed mandi information with prices."""
     service = MandiService(db)
-    mandis = service.get_all(skip=skip, limit=limit, district=district)
-    return mandis
+    
+    # If user_district and user_state are provided but no coordinates, geocode them
+    if user_district and user_state and not (user_lat and user_lon):
+        from app.core.geocoding import geocoding_service
+        coords = geocoding_service.get_district_coordinates(user_district, user_state)
+        if coords:
+            user_lat, user_lon = coords
+    
+    details = service.get_details(mandi_id, user_lat, user_lon)
+    if not details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Mandi not found",
+        )
+    return details
+
+
+@router.post(
+    "/compare",
+    status_code=status.HTTP_200_OK,
+    summary="Compare Mandis",
+    description="Compare up to 5 mandis side by side.",
+)
+async def compare_mandis(
+    mandi_ids: list[UUID],
+    user_lat: float | None = Query(default=None, description="User latitude"),
+    user_lon: float | None = Query(default=None, description="User longitude"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Compare multiple mandis."""
+    if len(mandi_ids) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least 2 mandis required for comparison",
+        )
+    if len(mandi_ids) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 mandis can be compared at once",
+        )
+    service = MandiService(db)
+    return service.compare(mandi_ids, user_lat, user_lon)
 
 
 @router.get(

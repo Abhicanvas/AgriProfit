@@ -16,9 +16,12 @@ from contextlib import asynccontextmanager
 
 from app.database.base import Base
 from app.database.session import engine
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -43,6 +46,10 @@ from app.community.routes import router as community_router
 from app.notifications.routes import router as notifications_router
 from app.admin.routes import router as admin_router
 from app.analytics.routes import router as analytics_router
+from app.transport.routes import router as transport_router
+from app.uploads.routes import router as uploads_router
+from app.inventory.routes import router as inventory_router
+from app.sales.routes import router as sales_router
 
 
 # =============================================================================
@@ -129,6 +136,10 @@ TAGS_METADATA = [
         "name": "Analytics",
         "description": "Market analytics and insights. Trends, statistics, comparisons, and dashboards.",
     },
+    {
+        "name": "Transport",
+        "description": "Transport cost calculator. Compare costs and find optimal mandi for selling produce.",
+    },
 ]
 
 
@@ -145,9 +156,11 @@ async def lifespan(app: FastAPI):
     - Validate configuration
     - Configure logging
     - Initialize rate limiter
+    - Start price sync scheduler
 
     Shutdown:
     - Cleanup resources
+    - Stop scheduler
     """
     # Startup
     setup_logging()
@@ -172,9 +185,26 @@ async def lifespan(app: FastAPI):
         }
     )
 
+    # Start background scheduler for price syncing
+    scheduler = None
+    try:
+        from app.integrations.scheduler import start_scheduler
+        scheduler = start_scheduler()
+        logger.info("Background scheduler started for automatic price syncing")
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}", exc_info=True)
+        logger.warning("API will continue without automatic price syncing")
+
     yield
 
     # Shutdown
+    if scheduler:
+        try:
+            scheduler.shutdown()
+            logger.info("Scheduler shut down successfully")
+        except Exception as e:
+            logger.error(f"Error shutting down scheduler: {e}", exc_info=True)
+    
     logger.info("AgriProfit API shutting down")
 
 
@@ -259,6 +289,18 @@ app.openapi = custom_openapi
 # MIDDLEWARE (order matters - first added = last executed)
 # =============================================================================
 
+# Add cache-control headers to prevent browser caching of API responses
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    """Add cache-control headers to API responses to ensure fresh data."""
+    response = await call_next(request)
+    # Only add no-cache headers for API endpoints, not static files
+    if not request.url.path.startswith("/uploads/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # CORS middleware (should be outermost for preflight requests)
 app.add_middleware(
     CORSMiddleware,
@@ -292,6 +334,22 @@ app.include_router(community_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(analytics_router)
+app.include_router(transport_router)
+app.include_router(uploads_router)
+app.include_router(inventory_router)
+app.include_router(sales_router)
+
+
+# =============================================================================
+# STATIC FILES (Uploads)
+# =============================================================================
+
+# Create uploads directory if it doesn't exist
+UPLOADS_DIR = Path("uploads/images")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files for serving uploaded images
+app.mount("/uploads/images", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 # =============================================================================
@@ -326,6 +384,43 @@ def health_check():
         dict: Health status with API version
     """
     return {"status": "healthy", "version": API_VERSION}
+
+
+@app.get(
+    "/sync/status",
+    tags=["Health"],
+    summary="Data Sync Status",
+    description="Check the status of the background price data sync service.",
+    responses={
+        200: {
+            "description": "Sync status information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "idle",
+                        "total_syncs": 5,
+                        "total_failures": 0,
+                        "last_success_at": "2026-02-06T06:00:00",
+                        "last_sync": {
+                            "status": "success",
+                            "records_fetched": 6000,
+                            "duration_seconds": 12.5,
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+def sync_status():
+    """
+    Get the current status of the price data sync service.
+
+    Returns sync state including last run time, record counts,
+    and error information if any.
+    """
+    from app.integrations.data_sync import get_sync_service
+    return get_sync_service().get_status_dict()
 
 
 @app.get(

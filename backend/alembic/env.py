@@ -29,6 +29,7 @@ from app.models import (
     CommunityPost,
     Notification,
     AdminAction,
+    Sale,
 )
 
 # this is the Alembic Config object, which provides

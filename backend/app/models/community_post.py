@@ -98,9 +98,21 @@ class CommunityPost(Base):
         passive_deletes=True,
     )
 
+    replies: Mapped[list["CommunityReply"]] = relationship(
+        "CommunityReply",
+        back_populates="post",
+        cascade="all, delete-orphan",
+    )
+
+    likes: Mapped[list["CommunityLike"]] = relationship(
+        "CommunityLike",
+        back_populates="post",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
         CheckConstraint(
-            "post_type IN ('normal', 'alert')",
+            "post_type IN ('discussion', 'question', 'tip', 'announcement')",
             name="community_posts_post_type_check",
         ),
         Index(
@@ -129,5 +141,96 @@ class CommunityPost(Base):
     def __repr__(self) -> str:
         return f"<CommunityPost id={self.id} type={self.post_type}>"
 
+    @property
+    def likes_count(self) -> int:
+        return len(self.likes)
 
-__all__ = ["CommunityPost"]
+    @property
+    def replies_count(self) -> int:
+        return len(self.replies)
+
+
+class CommunityReply(Base):
+    __tablename__ = "community_replies"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid_module.uuid4,
+    )
+
+    post_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP,
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    # Relationships
+    post: Mapped["CommunityPost"] = relationship(
+        "CommunityPost",
+        back_populates="replies",
+    )
+    
+    user: Mapped["User"] = relationship(
+        "User",
+        passive_deletes=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<CommunityReply id={self.id} post={self.post_id}>"
+
+
+class CommunityLike(Base):
+    __tablename__ = "community_likes"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    post_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP,
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    # Relationships
+    post: Mapped["CommunityPost"] = relationship(
+        "CommunityPost",
+        back_populates="likes",
+    )
+    
+    user: Mapped["User"] = relationship(
+        "User",
+        passive_deletes=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<CommunityLike user={self.user_id} post={self.post_id}>"
+
+
+__all__ = ["CommunityPost", "CommunityReply", "CommunityLike"]

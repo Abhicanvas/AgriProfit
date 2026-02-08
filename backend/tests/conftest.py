@@ -44,7 +44,8 @@ def create_sqlite_tables(engine):
             language VARCHAR(10) NOT NULL DEFAULT 'en',
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            deleted_at TIMESTAMP
+            deleted_at TIMESTAMP,
+            last_login TIMESTAMP
         )
         """,
         # OTP requests table
@@ -169,6 +170,62 @@ def create_sqlite_tables(engine):
             FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL
         )
         """,
+        # Inventory table
+        """
+        CREATE TABLE IF NOT EXISTS inventory (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            commodity_id TEXT NOT NULL,
+            quantity FLOAT NOT NULL,
+            unit VARCHAR(20) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT
+        )
+        """,
+        # Sales table
+        """
+        CREATE TABLE IF NOT EXISTS sales (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            commodity_id TEXT NOT NULL,
+            quantity NUMERIC(10, 2) NOT NULL,
+            unit VARCHAR(20) NOT NULL,
+            price_per_unit NUMERIC(10, 2) NOT NULL,
+            total_amount NUMERIC(12, 2) NOT NULL,
+            buyer_name VARCHAR(100),
+            sale_date DATE NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT
+        )
+        """,
+        # Community replies table
+        """
+        CREATE TABLE IF NOT EXISTS community_replies (
+            id TEXT PRIMARY KEY,
+            post_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at TIMESTAMP,
+            FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """,
+        # Community likes table
+        """
+        CREATE TABLE IF NOT EXISTS community_likes (
+            id TEXT PRIMARY KEY,
+            post_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE (post_id, user_id)
+        )
+        """,
     ]
 
     with engine.connect() as conn:
@@ -180,6 +237,10 @@ def create_sqlite_tables(engine):
 def drop_sqlite_tables(engine):
     """Drop all tables in reverse order to handle foreign keys."""
     tables = [
+        "community_likes",
+        "community_replies",
+        "sales",
+        "inventory",
         "admin_actions",
         "notifications",
         "community_posts",

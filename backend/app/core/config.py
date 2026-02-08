@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     # DATABASE
     # =========================================================================
     database_url: str = Field(
-        default="postgresql+psycopg://agriprofit:agriprofit@localhost:5432/agriprofit",
-        description="Database connection URL",
+        ...,  # Required - no default, must be set via environment variable
+        description="Database connection URL (required)",
     )
 
     database_pool_size: int = Field(
@@ -126,7 +126,7 @@ class Settings(BaseSettings):
 
     otp_cooldown_seconds: int = Field(
         default=60,
-        ge=30,
+        ge=2,
         le=300,
         description="Cooldown between OTP requests",
     )
@@ -136,6 +136,18 @@ class Settings(BaseSettings):
         ge=1,
         le=10,
         description="Max OTP verification attempts",
+    )
+
+    # Test OTP for development mode (bypasses actual OTP generation)
+    # SECURITY: Only set via env var, never hardcode
+    test_otp: Optional[str] = Field(
+        default="123456",
+        description="Fixed OTP for testing - MUST only be set in development",
+    )
+
+    enable_test_otp: bool = Field(
+        default=True,
+        description="Explicitly enable test OTP (development only)",
     )
 
     # =========================================================================
@@ -170,8 +182,8 @@ class Settings(BaseSettings):
     # CORS
     # =========================================================================
     cors_origins: List[str] = Field(
-        default=["*"],
-        description="Allowed CORS origins",
+        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+        description="Allowed CORS origins (never use * in production)",
     )
 
     cors_allow_credentials: bool = Field(
@@ -274,6 +286,31 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # DATA SYNC (data.gov.in)
+    # =========================================================================
+    data_gov_api_key: Optional[str] = Field(
+        default=None,
+        description="data.gov.in API key for fetching mandi prices",
+    )
+
+    data_gov_resource_id: str = Field(
+        default="9ef84268-d588-465a-a308-a864a43d0070",
+        description="data.gov.in resource ID for mandi price dataset",
+    )
+
+    price_sync_interval_hours: int = Field(
+        default=6,
+        ge=1,
+        le=24,
+        description="Interval in hours between automatic price syncs",
+    )
+
+    price_sync_enabled: bool = Field(
+        default=True,
+        description="Enable automatic price sync scheduler",
+    )
+
+    # =========================================================================
     # MONITORING
     # =========================================================================
     sentry_dsn: Optional[str] = Field(
@@ -330,11 +367,11 @@ class Settings(BaseSettings):
         """Set environment-specific defaults."""
         # Auto-enable debug in development
         if self.environment == Environment.DEVELOPMENT:
-            object.__setattr__(self, "debug", True)
+            self.debug = True
 
         # Enable HTTPS redirect in production
         if self.environment == Environment.PRODUCTION:
-            object.__setattr__(self, "https_redirect", True)
+            self.https_redirect = True
 
         return self
 

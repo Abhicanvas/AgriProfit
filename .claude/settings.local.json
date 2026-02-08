@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(for file in test_*_api.py)",
+      "Bash(do echo \"$file\")",
+      "Bash(done)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(for page in commodities community dashboard inventory login mandis notifications sales transport)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash([ -f \"/c/Users/alame/Desktop/repo-root/frontend/src/app/$page/page.tsx\" ])",
+      "Bash([ -f \"/c/Users/alame/Desktop/repo-root/frontend/src/app/$page/loading.tsx\" ])",
+      "Bash([ -f \"/c/Users/alame/Desktop/repo-root/frontend/src/app/$page/error.tsx\" ])",
+      "Bash([ -d \"/c/Users/alame/Desktop/repo-root/frontend/src/app/$page/__tests__\" ])",
+      "Bash(test:*)",
+      "Bash(for module in sales inventory transport uploads)",
+      "Bash(do echo \"=== $module ===\")",
+      "Bash(for module in admin auth commodities community forecasts mandi mandis notifications prices sales transport uploads users inventory)",
+      "Bash(do echo -n \"$module: \")",
+      "Bash(python3:*)",
+      "Bash(\"C:\\\\Users\\\\alame\\\\Desktop\\\\repo-root\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(dir \"C:\\\\Users\\\\alame\\\\Desktop\\\\repo-root\\\\agmarknet_daily_10yr.parquet\")",
+      "Bash(npx vitest run:*)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx vitest:*)"
+    ]
+  }
+}

@@ -1,0 +1,168 @@
+\documentclass{scrreprt}
+\usepackage{listings}
+\usepackage{underscore}
+\usepackage[bookmarks=true]{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\hypersetup{
+    bookmarks=false,    % show bookmarks bar?
+    pdftitle={Software Requirement Specification},    % title
+    pdfauthor={Mishal Joe Alias},                     % author
+    pdfsubject={Automated Rerouting Program SRS},     % subject of the document
+    pdfkeywords={Rerouting, Logistics, Cost Optimization, Toll Calculation}, % list of keywords
+    colorlinks=true,       % false: boxed links; true: colored links
+    linkcolor=blue,       % color of internal links
+    citecolor=black,       % color of links to bibliography
+    filecolor=black,        % color of file links
+    urlcolor=purple,        % color of external links
+    linktoc=page            % only page is linked
+}%
+\def\myversion{1.0 }
+\date{}
+
+\usepackage{hyperref}
+\begin{document}
+
+\begin{flushright}
+    \rule{16cm}{5pt}\vskip1cm
+    \begin{bfseries}
+        \Huge{SOFTWARE REQUIREMENTS\\ SPECIFICATION}\\
+        \vspace{1.7cm}
+        for\\
+        \vspace{2.5cm}
+        $AUTOMATED\; REROUTING\; PROGRAM$\\
+        \vspace{1.5cm}
+        \LARGE{Version \myversion approved}\\
+        \vspace{1.5cm}
+        Prepared by $MISHAL\;  JOE\;  ALIAS$\\
+        \vspace{1.5cm}
+        $Project\;  Team$\\
+        \vspace{1.5cm}
+        \today\\
+    \end{bfseries}
+\end{flushright}
+
+\tableofcontents
+
+\chapter*{Revision History}
+
+\begin{center}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+	    Name & Date & Reason For Changes & Version\\
+        \hline
+	    Mishal Joe Alias & \today & Detailed Draft based on Codebase & 1.0\\
+        \hline
+    \end{tabular}
+\end{center}
+
+\chapter{Introduction}
+
+\section{Purpose}
+The purpose of this document is to specify the software requirements for the \textbf{Automated Rerouting Program}. The system allows users (farmers and logistics managers) to identify the most profitable market destinations by calculating comprehensive transport costs. The "rerouting" capability refers to the dynamic selection of optimal destination routes based on real-time factors like toll costs, distance, and commodity prices, effectively guiding the load to the best endpoint.
+
+\section{Document Conventions}
+This document follows the IEEE 830 standard for Software Requirements Specifications.
+\begin{itemize}
+    \item \textbf{Bold} text is used for emphasis.
+    \item \textit{Italic} text is used for variable names and calculations.
+\end{itemize}
+
+\section{Intended Audience}
+\begin{itemize}
+    \item \textbf{Developers}: To implement the cost calculation algorithms.
+    \item \textbf{End Users}: Farmers and Drivers who use the tool for decision making.
+\end{itemize}
+
+\section{Project Scope}
+The \textbf{Automated Rerouting Program} is a web-based decision support system. It integrates:
+\begin{itemize}
+    \item \textbf{Dynamic Route Costing}: Calculating freight based on vehicle type and distance.
+    \item \textbf{Toll Estimation}: Using state-specific factors to estimate toll plaza charges.
+    \item \textbf{Profit Maximization}: Comparing "Gross Revenue" against "Total Transport Costs" to suggest the optimal route (Mandi).
+\end{itemize}
+
+\chapter{Overall Description}
+
+\section{Product Functions}
+The system provides the following core functions:
+\begin{enumerate}
+    \item \textbf{Input Processing}: Accepts Commodity, Quantity, and Source Location.
+    \item \textbf{Vehicle Selection}: Automatically assigns a vehicle (e.g., Tata Ace, Truck) based on load weight.
+    \item \textbf{Route Simulation}: Calculates distance to potential markets (Mandis) using Haversine formula with road multipliers.
+    \item \textbf{Detailed Cost Breakdown}: Computes Freight, Tolls, Loading/Unloading, and Additional charges.
+    \item \textbf{Result Ranking}: Displays routes sorted by Net Profit.
+\end{enumerate}
+
+\section{User Classes}
+\begin{itemize}
+    \item \textbf{Farmers/Traders}: Primary users entering produce details to find the best market.
+    \item \textbf{Drivers}: Use the calculator to estimate trip expenses.
+\end{itemize}
+
+\section{Operating Environment}
+\begin{itemize}
+    \item \textbf{Frontend}: Next.js with React (Web).
+    \item \textbf{Backend}: FastAPI (Python).
+    \item \textbf{Database}: PostgreSQL (for storing State/District data).
+\end{itemize}
+
+\chapter{System Features}
+
+\section{Automated Vehicle Selection \& Freight Calculation}
+\subsection{Description}
+The system automatically selects the most efficient vehicle class based on the input quantity to ensure accurate cost estimation.
+
+\subsection{Functional Requirements}
+\textbf{REQ-VEH-1}: The system shall categorize loads into vehicle types:
+\begin{itemize}
+    \item $\le$ 0.75 tons: Tata Ace (Rate: ₹15/km)
+    \item $\le$ 2 tons: Mini Truck (2T) (Rate: ₹20/km)
+    \item $\le$ 7 tons: LCV (7T) (Rate: ₹28/km)
+    \item $\le$ 12 tons: Truck (12T) (Rate: ₹25/km)
+    \item $\le$ 20 tons: 10-Wheeler (Rate: ₹32/km)
+    \item $>$ 20 tons: Multi-Axle (Rate: ₹55/km)
+\end{itemize}
+\textbf{REQ-VEH-2}: The system shall calculate trips required via: $Trips = \lceil Quantity / VehicleCapacity \rceil$.
+\textbf{REQ-VEH-3}: Base Freight Cost shall be: $Distance \times Rate \times Trips$.
+
+\section{State-Wise Toll Calculation}
+\subsection{Description}
+The system estimates toll costs dynamically based on the route's state and vehicle category.
+
+\subsection{Functional Requirements}
+\textbf{REQ-TOLL-1}: The system shall utilize state-specific toll density factors (e.g., UP: 0.86, Kerala: 0.25).
+\textbf{REQ-TOLL-2}: The number of toll plazas shall be estimated as:
+$$ Plazas = \lfloor (Distance / 60) \times StateFactor \rfloor $$
+\textbf{REQ-TOLL-3}: Toll cost shall be calculated based on vehicle class (Light: ₹100, Medium: ₹200, Heavy: ₹350 per plaza).
+
+\section{Dynamic Route Profit Analysis}
+\subsection{Description}
+The system effectively "reroutes" the user to the most profitable destination by comparing Net Profit across multiple endpoints.
+
+\subsection{Functional Requirements}
+\textbf{REQ-PROF-1}: Usage of Haversine formula with a multiplier (1.4x) to estimate road distance from aerial distance.
+\textbf{REQ-PROF-2}: Net Profit calculation:
+$$ NetProfit = (Price \times Quantity) - (Freight + Tolls + Loading + Unloading + Misc) $$
+\textbf{REQ-PROF-3}: The system shall highlight the "Best Option" route with the highest Net Profit.
+
+\chapter{Other Nonfunctional Requirements}
+
+\section{Performance}
+\begin{itemize}
+    \item Cost calculations for up to 50 potential routes shall complete in under 1 second.
+\end{itemize}
+
+\section{Reliability}
+\begin{itemize}
+    \item The system shall provide default fallbacks for missing state data (Default Factor: 0.5).
+\end{itemize}
+
+\chapter{Appendix A: Data Dictionary}
+\begin{itemize}
+    \item \textbf{Mandi}: A market destination for agricultural produce.
+    \item \textbf{Quintal}: Unit of weight equal to 100 kg.
+    \item \textbf{Hamali}: Labor costs for loading/unloading.
+\end{itemize}
+
+\end{document}

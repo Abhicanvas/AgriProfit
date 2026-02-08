@@ -27,12 +27,22 @@ def _validate_title(v: str) -> str:
 
 
 def _validate_content(v: str) -> str:
-    """Shared content validation."""
+    """Shared content validation for posts."""
     v = v.strip()
     if not v:
         raise ValueError("Content cannot be empty")
     if len(v) < 10:
         raise ValueError("Content must be at least 10 characters")
+    return v
+
+
+def _validate_reply_content(v: str) -> str:
+    """Content validation for replies (shorter minimum)."""
+    v = v.strip()
+    if not v:
+        raise ValueError("Reply content cannot be empty")
+    if len(v) < 1:
+        raise ValueError("Reply must be at least 1 character")
     return v
 
 
@@ -135,6 +145,30 @@ class CommunityPostUpdate(BaseModel):
         return v
 
 
+class CommunityReplyCreate(BaseModel):
+    """Schema for creating a reply."""
+    content: str = Field(..., min_length=1, max_length=1000, description="Reply content")
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v: str) -> str:
+        return _validate_reply_content(v)
+
+
+class CommunityReplyResponse(BaseModel):
+    """Schema for reply response."""
+    id: UUID
+    post_id: UUID
+    user_id: UUID
+    content: str
+    created_at: datetime
+    
+    # Optional author details if joined
+    author_name: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CommunityPostResponse(BaseModel):
     """Schema for CommunityPost API responses."""
 
@@ -148,6 +182,16 @@ class CommunityPostResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
+    # Interaction stats
+    likes_count: int = Field(default=0, description="Number of upvotes")
+    replies_count: int = Field(default=0, description="Number of replies")
+    
+    # User context (populated manually in service/route if needed)
+    user_has_liked: bool = Field(default=False, description="If current user liked this post")
+    
+    # Author name
+    author_name: str | None = Field(None, description="Author's name")
+
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={
@@ -160,7 +204,10 @@ class CommunityPostResponse(BaseModel):
                 "district": "KL-EKM",
                 "is_admin_override": False,
                 "created_at": "2024-01-15T10:30:00Z",
-                "updated_at": "2024-01-15T10:30:00Z"
+                "updated_at": "2024-01-15T10:30:00Z",
+                "likes_count": 5,
+                "replies_count": 2,
+                "user_has_liked": True
             }
         }
     )
@@ -187,7 +234,9 @@ class CommunityPostListResponse(BaseModel):
                         "district": "KL-EKM",
                         "is_admin_override": False,
                         "created_at": "2024-01-15T10:30:00Z",
-                        "updated_at": "2024-01-15T10:30:00Z"
+                        "updated_at": "2024-01-15T10:30:00Z",
+                        "likes_count": 12,
+                        "replies_count": 3
                     }
                 ],
                 "total": 50,

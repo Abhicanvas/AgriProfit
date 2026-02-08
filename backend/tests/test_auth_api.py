@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, ANY
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.models import User, OTPRequest
@@ -12,8 +12,8 @@ def create_otp(db, phone_number, otp, expires_in=300):
     otp = OTPRequest(
         phone_number=phone_number,
         otp_hash=hash_value(otp),
-        expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
-        created_at=datetime.utcnow(),
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(otp)
     db.commit()
@@ -26,7 +26,8 @@ def phone_number():
 
 @pytest.fixture
 def otp():
-    return "123456"
+    # Use a non-test OTP to avoid bypass in development mode (test OTP is 123456)
+    return "654321"
 
 def test_request_otp_success(client, test_db, phone_number):
     """Test successful OTP request."""
@@ -89,8 +90,8 @@ def test_verify_otp_expired(client, test_db, phone_number, otp):
         phone_number=phone_number,
         role="farmer",
         district="KL-TVM",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     test_db.add(user)
     test_db.commit()

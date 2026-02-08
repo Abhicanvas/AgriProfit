@@ -1,8 +1,8 @@
 import uuid as uuid_module
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import String, TIMESTAMP, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import String, TIMESTAMP, Text, Integer, Boolean, text
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 
@@ -35,6 +35,51 @@ class Commodity(Base):
     unit: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
+    )
+
+    # Description for detailed view
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Seasonal information
+    growing_months: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
+        comment="Months when crop is grown [1-12]",
+    )
+
+    harvest_months: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
+        comment="Months when crop is harvested [1-12]",
+    )
+
+    peak_season_start: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Start month of peak selling season (1-12)",
+    )
+
+    peak_season_end: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="End month of peak selling season (1-12)",
+    )
+
+    # Regional information
+    major_producing_states: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(100)),
+        nullable=True,
+        comment="Top producing states for this commodity",
+    )
+
+    # Status
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

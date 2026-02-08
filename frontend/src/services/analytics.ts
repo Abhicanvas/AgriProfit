@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import api, { apiWithLongTimeout } from '@/lib/api';
 
 export interface MarketSummary {
     total_commodities: number;
@@ -8,6 +8,8 @@ export interface MarketSummary {
     total_posts: number;
     total_users: number;
     last_updated: string;
+    data_is_stale: boolean;
+    hours_since_update: number;
 }
 
 export interface TopCommodityItem {
@@ -34,11 +36,18 @@ export interface PriceStatistics {
     data_points: number;
 }
 
+export interface WeeklyTrend {
+    day: string;
+    date: string;
+    value: number;
+}
+
 export interface DashboardData {
     market_summary: MarketSummary;
     recent_price_changes: PriceStatistics[];
     top_commodities: TopCommodityItem[];
     top_mandis: TopMandiItem[];
+    weekly_trends: WeeklyTrend[];
 }
 
 export interface MarketCoverage {
@@ -49,7 +58,7 @@ export interface MarketCoverage {
 
 export const analyticsService = {
     async getDashboard(): Promise<DashboardData> {
-        const response = await api.get('/analytics/dashboard');
+        const response = await apiWithLongTimeout.get('/analytics/dashboard');
         return response.data;
     },
 

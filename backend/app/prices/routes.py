@@ -25,6 +25,58 @@ from app.auth.security import get_current_user, require_role
 
 router = APIRouter(prefix="/prices", tags=["Prices"])
 
+from app.prices.schemas import CurrentPriceResponse
+
+@router.get(
+    "/current",
+    response_model=dict | list[CurrentPriceResponse], # Allow wrapping or list
+    summary="Get Current Market Prices",
+    description="Get latest market prices for all commodities, with optional filtering.",
+)
+async def get_current_prices(
+    commodity: str | None = Query(None, description="Search by commodity name"),
+    state: str | None = Query(None, description="Filter by state"),
+    db: Session = Depends(get_db),
+):
+    """Get current prices list."""
+    service = PriceHistoryService(db)
+    prices = service.get_current_prices_list(commodity=commodity, state=state)
+    return {"prices": prices}
+
+
+@router.get(
+    "/historical",
+    response_model=dict,
+    summary="Get Historical Prices",
+    description="Get price trend for a commodity.",
+)
+async def get_historical_prices(
+    commodity: str = Query(..., description="Commodity name"),
+    mandi_id: str = Query("all", description="Mandi ID or 'all'"),
+    days: int = Query(30, description="Number of days"),
+    db: Session = Depends(get_db),
+):
+    """Get historical prices."""
+    service = PriceHistoryService(db)
+    data = service.get_historical_prices(commodity=commodity, mandi_id=mandi_id, days=days)
+    return {"data": data}
+
+
+@router.get(
+    "/top-movers",
+    response_model=dict,
+    summary="Get Top Movers",
+    description="Get top gaining and losing commodities.",
+)
+async def get_top_movers(
+    limit: int = Query(5, description="Number of items to return"),
+    db: Session = Depends(get_db),
+):
+    """Get top movers."""
+    service = PriceHistoryService(db)
+    data = service.get_top_movers(limit=limit)
+    return data
+
 
 @router.post(
     "/",

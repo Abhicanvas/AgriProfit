@@ -6,11 +6,6 @@ from sqlalchemy.orm import sessionmaker, Session
 # Import directly from config module to avoid __init__.py cascade
 from app.core.config import settings
 
-
-# Debug logging: show DATABASE_URL with password masked
-_masked_url = re.sub(r'://[^:]+:[^@]+@', '://***:***@', settings.database_url)
-print(f"[DB] Connecting to: {_masked_url}")
-
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,

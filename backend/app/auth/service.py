@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -6,13 +7,16 @@ from sqlalchemy.orm import Session
 from app.models import User, OTPRequest
 from app.auth.security import hash_value, verify_hashed_value, create_access_token
 from app.auth.otp import is_otp_expired
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def send_otp_sms(phone_number: str, otp: str) -> bool:
     """Send OTP via SMS. This is a stub that can be replaced with actual SMS integration."""
     # In production, this would integrate with an SMS provider
     # For now, this is a stub that always returns True
-    print(f"[SMS STUB] Would send OTP {otp} to {phone_number}")
+    logger.info("[SMS STUB] Would send OTP to %s", phone_number)
     return True
 
 
@@ -114,23 +118,43 @@ class AuthService:
         Verify OTP for a phone number.
         Returns (success, message).
         """
+        # Log verification attempt without sensitive data
+        logger.info(f"[VERIFY] OTP verification attempt for phone ending in ***{phone_number[-4:]}")
+        logger.debug(f"[VERIFY] Environment: {settings.environment}")
+        
+        # Test OTP only works with explicit enable flag in development
+        if (settings.is_development and 
+            settings.enable_test_otp and 
+            settings.test_otp and 
+            otp == settings.test_otp):
+            logger.warning(f"[DEV] Test OTP used for ***{phone_number[-4:]}. Disable before production!")
+            return True, "OTP verified successfully (test mode)"
+
         otp_request = self.get_latest_otp_request(phone_number)
 
         if not otp_request:
+            logger.warning(f"[VERIFY] No OTP request found for {phone_number}")
             return False, "No OTP request found"
 
         if is_otp_expired(otp_request.expires_at):
+            logger.warning(f"[VERIFY] OTP expired for {phone_number}")
             return False, "OTP has expired"
 
         if otp_request.verified:
+            logger.warning(f"[VERIFY] OTP already used for {phone_number}")
             return False, "OTP has already been used"
 
         if not verify_hashed_value(otp, otp_request.otp_hash):
+            logger.warning(f"[VERIFY] Invalid OTP for {phone_number}")
             return False, "Invalid OTP"
 
-        # Mark OTP as used
+        # Mark OTP as used and delete old OTP records for this phone
         try:
             otp_request.verified = True
+            # Delete all OTP records for this phone number to reset rate limiting
+            self.db.query(OTPRequest).filter(
+                OTPRequest.phone_number == phone_number
+            ).delete()
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -140,8 +164,9 @@ class AuthService:
 
     def generate_tokens(self, user: User) -> dict:
         """Generate access token for user."""
+        # Note: Avoid putting PII like phone numbers in JWT
         access_token = create_access_token(
-            data={"sub": str(user.id), "phone": user.phone_number, "role": user.role}
+            data={"sub": str(user.id), "role": user.role}
         )
         return {
             "access_token": access_token,
@@ -158,7 +183,12 @@ class AuthService:
         if not otp_request:
             return True, 0
 
-        time_since_request = datetime.utcnow() - otp_request.created_at
+        # Compare using naive datetime (database stores local time)
+        # Use datetime.now() without timezone to match database behavior
+        created_at = otp_request.created_at
+        if created_at.tzinfo is not None:
+            created_at = created_at.replace(tzinfo=None)
+        time_since_request = datetime.now() - created_at
         seconds_elapsed = time_since_request.total_seconds()
 
         if seconds_elapsed < cooldown_seconds:

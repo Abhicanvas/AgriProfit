@@ -49,11 +49,18 @@ DISTRICT_NAMES = {
 }
 
 
-def get_district_name(district_code: str | None) -> str | None:
-    """Get district name from district code."""
-    if district_code is None:
+def get_district_name(district_value: str | None) -> str | None:
+    """Get district name from district code or return the value if it's already a name."""
+    if district_value is None:
         return None
-    return DISTRICT_NAMES.get(district_code, "Unknown")
+    # First check if it's a district code (e.g., "KL-EKM")
+    if district_value in DISTRICT_NAMES:
+        return DISTRICT_NAMES[district_value]
+    # If it's already a valid district name, return it as-is
+    if district_value in DISTRICT_NAMES.values():
+        return district_value
+    # Unknown district
+    return district_value
 
 
 class UserResponse(BaseModel):
@@ -64,7 +71,9 @@ class UserResponse(BaseModel):
     """
     id: UUID = Field(..., description="Unique user identifier")
     phone_number: str = Field(..., description="10-digit Indian mobile number")
+    name: str | None = Field(None, description="User's full name")
     role: str = Field(..., description="User role: 'farmer' or 'admin'")
+    state: str | None = Field(None, description="State name")
     district: str | None = Field(None, description="Kerala district code (e.g., 'KL-EKM')")
     language: str = Field(..., description="Preferred language: 'en' (English) or 'ml' (Malayalam)")
     created_at: datetime = Field(..., description="Account creation timestamp")
@@ -81,7 +90,9 @@ class UserResponse(BaseModel):
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "phone_number": "9876543210",
+                "name": "Rajesh Kumar",
                 "role": "farmer",
+                "state": "Kerala",
                 "district": "KL-EKM",
                 "language": "ml",
                 "created_at": "2024-01-15T10:30:00Z",
@@ -95,9 +106,23 @@ class UserUpdate(BaseModel):
     """
     Schema for updating user profile.
 
-    Only district and language can be updated by users.
-    Both fields are optional - only provided fields will be updated.
+    Users can update their name, state, district, and language.
+    All fields are optional - only provided fields will be updated.
     """
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="User's full name",
+        json_schema_extra={"example": "Rajesh Kumar"}
+    )
+    state: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="State name",
+        json_schema_extra={"example": "Kerala"}
+    )
     district: str | None = Field(
         default=None,
         description="Kerala district code (e.g., 'KL-EKM' for Ernakulam)",
@@ -141,6 +166,37 @@ class UserUpdate(BaseModel):
                     "value": {"district": "KL-KKD", "language": "en"}
                 }
             ]
+        }
+    )
+
+
+class PhoneNumberUpdate(BaseModel):
+    """Schema for updating phone number (requires OTP verification)."""
+    new_phone_number: str = Field(
+        ...,
+        description="New 10-digit Indian mobile number",
+        pattern=r"^[6-9]\d{9}$",
+        json_schema_extra={"example": "9876543210"}
+    )
+    otp: str = Field(
+        ...,
+        description="6-digit OTP sent to new phone number",
+        pattern=r"^\d{6}$",
+        json_schema_extra={"example": "123456"}
+    )
+    request_id: str = Field(
+        ...,
+        description="OTP request ID from /auth/request-otp",
+        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"}
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "new_phone_number": "9876543210",
+                "otp": "123456",
+                "request_id": "550e8400-e29b-41d4-a716-446655440000"
+            }
         }
     )
 

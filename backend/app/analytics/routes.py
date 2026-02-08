@@ -66,6 +66,52 @@ async def get_market_summary(
 
 
 @router.get(
+    "/price-trends",
+    response_model=list[PriceTrendResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get Price Trends",
+    description="Get historical price trends. Requires commodity_id as query parameter. Optionally filter by mandi. Public endpoint.",
+    responses={
+        200: {"description": "Price trend data"},
+        400: {"description": "Missing required parameters"},
+        404: {"description": "No price data found"},
+    }
+)
+async def get_price_trends_query(
+    db: Session = Depends(get_db),
+    commodity_id: UUID | None = Query(default=None, description="Commodity UUID (required)"),
+    mandi_id: UUID | None = Query(default=None, description="Filter by mandi UUID"),
+    days: int = Query(default=30, ge=1, le=365, description="Time period in days"),
+) -> list[PriceTrendResponse]:
+    """
+    Get price trends with query parameters.
+    
+    This endpoint provides the same functionality as /trends/{commodity_id}
+    but accepts commodity_id as a query parameter for easier integration.
+    """
+    if not commodity_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="commodity_id query parameter is required"
+        )
+    
+    service = AnalyticsService(db)
+    trends = service.get_price_trends(
+        commodity_id=commodity_id,
+        mandi_id=mandi_id,
+        days=days,
+    )
+
+    if not trends:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No price data found for the specified commodity",
+        )
+
+    return trends
+
+
+@router.get(
     "/top-commodities",
     response_model=list[TopCommodityItem],
     status_code=status.HTTP_200_OK,

@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.auth.service import AuthService
@@ -94,7 +94,7 @@ class TestAuthService:
         """Test creating OTP request."""
         service = AuthService(test_db)
         
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         otp_request = service.create_otp_request(
             phone_number="9876543210",
             otp="123456",
@@ -110,16 +110,16 @@ class TestAuthService:
         service = AuthService(test_db)
         
         # Create multiple OTP requests with distinct timestamps
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         
         # First request (oldest)
         req1 = service.create_otp_request("9876543210", "111111", expires_at)
-        req1.created_at = datetime.utcnow() - timedelta(seconds=10)
+        req1.created_at = datetime.now(timezone.utc) - timedelta(seconds=10)
         test_db.commit()
         
         # Second request
         req2 = service.create_otp_request("9876543210", "222222", expires_at)
-        req2.created_at = datetime.utcnow() - timedelta(seconds=5)
+        req2.created_at = datetime.now(timezone.utc) - timedelta(seconds=5)
         test_db.commit()
         
         # Third request (newest)
@@ -143,12 +143,12 @@ class TestAuthService:
         """Test successful OTP verification."""
         service = AuthService(test_db)
         
-        # Create OTP request
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
-        service.create_otp_request("9876543210", "123456", expires_at)
+        # Create OTP request - use non-test OTP to test actual verification logic
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        service.create_otp_request("9876543210", "654321", expires_at)
         
         # Verify OTP
-        success, message = service.verify_otp("9876543210", "123456")
+        success, message = service.verify_otp("9876543210", "654321")
         
         assert success is True
         assert message == "OTP verified successfully"
@@ -157,7 +157,8 @@ class TestAuthService:
         """Test OTP verification when no request exists."""
         service = AuthService(test_db)
         
-        success, message = service.verify_otp("9876543210", "123456")
+        # Use non-test OTP to test actual verification logic
+        success, message = service.verify_otp("9876543210", "654321")
         
         assert success is False
         assert message == "No OTP request found"
@@ -166,11 +167,11 @@ class TestAuthService:
         """Test OTP verification when OTP is expired."""
         service = AuthService(test_db)
         
-        # Create expired OTP request
-        expires_at = datetime.utcnow() - timedelta(minutes=5)  # Already expired
-        service.create_otp_request("9876543210", "123456", expires_at)
+        # Create expired OTP request - use non-test OTP to test actual verification logic
+        expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)  # Already expired
+        service.create_otp_request("9876543210", "654321", expires_at)
         
-        success, message = service.verify_otp("9876543210", "123456")
+        success, message = service.verify_otp("9876543210", "654321")
         
         assert success is False
         assert message == "OTP has expired"
@@ -179,13 +180,13 @@ class TestAuthService:
         """Test OTP verification when OTP is already used."""
         service = AuthService(test_db)
         
-        # Create and verify OTP
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
-        service.create_otp_request("9876543210", "123456", expires_at)
-        service.verify_otp("9876543210", "123456")  # Use it once
+        # Create and verify OTP - use non-test OTP to test actual verification logic
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        service.create_otp_request("9876543210", "654321", expires_at)
+        service.verify_otp("9876543210", "654321")  # Use it once
         
         # Try to use again
-        success, message = service.verify_otp("9876543210", "123456")
+        success, message = service.verify_otp("9876543210", "654321")
         
         assert success is False
         assert message == "OTP has already been used"
@@ -195,7 +196,7 @@ class TestAuthService:
         service = AuthService(test_db)
         
         # Create OTP request
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         service.create_otp_request("9876543210", "123456", expires_at)
         
         # Try wrong OTP
@@ -230,7 +231,7 @@ class TestAuthService:
         service = AuthService(test_db)
         
         # Create a recent OTP request
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         service.create_otp_request("9876543210", "123456", expires_at)
         
         # Check if can request (should be blocked)
@@ -245,7 +246,7 @@ class TestAuthService:
         service = AuthService(test_db)
         
         # Create OTP requests
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
         service.create_otp_request("9876543210", "111111", expires_at)
         service.create_otp_request("9876543210", "222222", expires_at)
         

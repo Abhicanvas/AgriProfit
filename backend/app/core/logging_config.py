@@ -8,15 +8,19 @@ This module provides:
 - Environment-specific log levels
 """
 import logging
+import platform
 import sys
-from datetime import datetime
-from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timezone
+from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
 from pythonjsonlogger import jsonlogger
 
 from app.core.config import settings, Environment
+
+# Detect if running on Windows
+IS_WINDOWS = platform.system() == "Windows"
 
 
 # =============================================================================
@@ -65,7 +69,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         super().add_fields(log_record, record, message_dict)
 
         # Add timestamp in ISO format
-        log_record["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        log_record["timestamp"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         # Add environment
         log_record["environment"] = ENVIRONMENT
@@ -144,13 +148,22 @@ def setup_logging() -> None:
     # ===================
     # APPLICATION LOG
     # ===================
-    app_handler = TimedRotatingFileHandler(
-        LOG_DIR / "app.log",
-        when="midnight",
-        interval=1,
-        backupCount=LOG_RETENTION_DAYS,
-        encoding="utf-8",
-    )
+    # Use RotatingFileHandler on Windows to avoid file locking issues
+    if IS_WINDOWS:
+        app_handler = RotatingFileHandler(
+            LOG_DIR / "app.log",
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
+    else:
+        app_handler = TimedRotatingFileHandler(
+            LOG_DIR / "app.log",
+            when="midnight",
+            interval=1,
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
     app_handler.setLevel(LOG_LEVEL)
     app_handler.setFormatter(json_formatter)
     root_logger.addHandler(app_handler)
@@ -162,26 +175,44 @@ def setup_logging() -> None:
     access_logger.setLevel(logging.INFO)
     access_logger.propagate = False  # Don't propagate to root
 
-    access_handler = TimedRotatingFileHandler(
-        LOG_DIR / "access.log",
-        when="midnight",
-        interval=1,
-        backupCount=LOG_RETENTION_DAYS,
-        encoding="utf-8",
-    )
+    # Use RotatingFileHandler on Windows to avoid file locking issues
+    if IS_WINDOWS:
+        access_handler = RotatingFileHandler(
+            LOG_DIR / "access.log",
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
+    else:
+        access_handler = TimedRotatingFileHandler(
+            LOG_DIR / "access.log",
+            when="midnight",
+            interval=1,
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
     access_handler.setFormatter(json_formatter)
     access_logger.addHandler(access_handler)
 
     # ===================
     # ERROR LOG
     # ===================
-    error_handler = TimedRotatingFileHandler(
-        LOG_DIR / "error.log",
-        when="midnight",
-        interval=1,
-        backupCount=LOG_RETENTION_DAYS,
-        encoding="utf-8",
-    )
+    # Use RotatingFileHandler on Windows to avoid file locking issues
+    if IS_WINDOWS:
+        error_handler = RotatingFileHandler(
+            LOG_DIR / "error.log",
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
+    else:
+        error_handler = TimedRotatingFileHandler(
+            LOG_DIR / "error.log",
+            when="midnight",
+            interval=1,
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(json_formatter)
     root_logger.addHandler(error_handler)
@@ -193,13 +224,22 @@ def setup_logging() -> None:
     security_logger.setLevel(logging.INFO)
     security_logger.propagate = False
 
-    security_handler = TimedRotatingFileHandler(
-        LOG_DIR / "security.log",
-        when="midnight",
-        interval=1,
-        backupCount=LOG_RETENTION_DAYS,
-        encoding="utf-8",
-    )
+    # Use RotatingFileHandler on Windows to avoid file locking issues
+    if IS_WINDOWS:
+        security_handler = RotatingFileHandler(
+            LOG_DIR / "security.log",
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
+    else:
+        security_handler = TimedRotatingFileHandler(
+            LOG_DIR / "security.log",
+            when="midnight",
+            interval=1,
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
     security_handler.setFormatter(json_formatter)
     security_logger.addHandler(security_handler)
 
