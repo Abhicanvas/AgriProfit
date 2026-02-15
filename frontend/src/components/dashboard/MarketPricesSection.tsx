@@ -1,14 +1,23 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, TrendingUp } from "lucide-react"
 
 import { CurrentPricesTab } from "./tabs/CurrentPricesTab"
-import { HistoricalTrendsTab } from "./tabs/HistoricalTrendsTab"
-import { TopMoversTab } from "./tabs/TopMoversTab"
+
+// Lazy load heavy tab components (recharts-dependent)
+const HistoricalTrendsTab = dynamic(
+    () => import("./tabs/HistoricalTrendsTab").then(m => m.HistoricalTrendsTab),
+    { ssr: false, loading: () => <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading chart...</div> }
+)
+const TopMoversTab = dynamic(
+    () => import("./tabs/TopMoversTab").then(m => m.TopMoversTab),
+    { ssr: false }
+)
 
 export function MarketPricesSection() {
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date())

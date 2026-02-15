@@ -26,7 +26,7 @@ class TransportCalculateRequest(BaseModel):
     vehicle_type: str = Field(default="tempo", description="Vehicle type: tempo, truck_small, truck_large, pickup")
 
 
-router = APIRouter(prefix="/api/v1/transport", tags=["Transport"])
+router = APIRouter(prefix="/transport", tags=["Transport"])
 
 
 @router.post(

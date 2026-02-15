@@ -1,7 +1,7 @@
 import uuid as uuid_module
 from datetime import datetime, timezone, time
 from uuid import UUID
-from sqlalchemy import Boolean, Float, String, TIMESTAMP, Time, Integer, text
+from sqlalchemy import Boolean, Float, String, TIMESTAMP, Time, Integer, Index, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
@@ -171,6 +171,11 @@ class Mandi(Base):
         "PriceHistory",
         back_populates="mandi",
         cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_mandis_state_district", "state", "district"),
+        Index("idx_mandis_active_name", "is_active", "name"),
     )
 
     def __repr__(self) -> str:

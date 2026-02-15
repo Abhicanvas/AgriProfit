@@ -168,33 +168,40 @@ class InventoryService:
                     'estimated_max_revenue': 0,
                 })
                 continue
-            
+
+            # Batch-load all mandis for this set of prices (avoid N+1)
+            mandi_ids = [p.mandi_id for p in latest_prices if p.mandi_id]
+            mandis_map = {}
+            if mandi_ids:
+                mandis_list = self.db.query(Mandi).filter(Mandi.id.in_(mandi_ids)).all()
+                mandis_map = {m.id: m for m in mandis_list}
+
             # Build list of best mandis
             best_mandis = []
-            
+
             for price in latest_prices:
-                # Get mandi details
-                mandi = self.db.query(Mandi).filter(Mandi.id == price.mandi_id).first()
+                # Get mandi details from batch lookup
+                mandi = mandis_map.get(price.mandi_id)
                 if not mandi:
                     continue
-                
+
                 # Calculate priority (prefer user's state)
                 priority_boost = 0
                 if user_state and mandi.state.lower() == user_state.lower():
                     priority_boost = 1
-                
-                # Convert prices from per quintal to per kg (1 quintal = 100 kg)
-                modal_price = float(price.modal_price) / 100 if price.modal_price else 0
-                min_price = float(price.min_price) / 100 if price.min_price else modal_price
-                max_price = float(price.max_price) / 100 if price.max_price else modal_price
-                
+
+                # Prices are in per quintal
+                modal_price = float(price.modal_price) if price.modal_price else 0
+                min_price = float(price.min_price) if price.min_price else modal_price
+                max_price = float(price.max_price) if price.max_price else modal_price
+
                 # Calculate estimated revenue
-                # Quantity is in kg, prices are now per kg
-                quantity = float(item.quantity)
-                estimated_min = quantity * min_price
-                estimated_max = quantity * max_price
-                estimated_modal = quantity * modal_price
-                
+                # Quantity is in kg, prices are per quintal, so divide qty by 100
+                quantity_quintals = float(item.quantity) / 100
+                estimated_min = quantity_quintals * min_price
+                estimated_max = quantity_quintals * max_price
+                estimated_modal = quantity_quintals * modal_price
+
                 best_mandis.append({
                     'mandi_id': str(mandi.id),
                     'mandi_name': mandi.name,

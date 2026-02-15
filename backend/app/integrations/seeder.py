@@ -16,6 +16,7 @@ from app.database.session import SessionLocal
 from app.models import Commodity, Mandi
 from app.models.price_history import PriceHistory
 from app.integrations.data_gov_client import DataGovClient, get_data_gov_client
+from app.integrations.geocoding import get_geocoding_service
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,10 @@ class DatabaseSeeder:
         
         logger.info(f"Seeding {len(mandis_data)} mandis...")
         
+        geocoding_service = get_geocoding_service()
         created = 0
+        geocoded = 0
+        
         for key, data in mandis_data.items():
             existing = self.db.query(Mandi).filter(
                 Mandi.name == data["name"],
@@ -193,6 +197,23 @@ class DatabaseSeeder:
                 c for c in data["name"].upper() if c.isalnum()
             )[:10] + str(uuid4())[:4].upper()
             
+            # Try to geocode the mandi
+            latitude = None
+            longitude = None
+            try:
+                coords = geocoding_service.geocode_mandi(
+                    mandi_name=data["name"],
+                    district=data["district"],
+                    state=data["state"],
+                )
+                if coords:
+                    latitude, longitude = coords
+                    geocoded += 1
+            except Exception as e:
+                logger.warning(
+                    f"Geocoding failed for {data['name']}, {data['district']}: {e}"
+                )
+            
             mandi = Mandi(
                 id=uuid4(),
                 name=data["name"],
@@ -200,6 +221,8 @@ class DatabaseSeeder:
                 state=data["state"],
                 district=data["district"],
                 address=f"{data['name']}, {data['district']}, {data['state']}",
+                latitude=latitude,
+                longitude=longitude,
                 is_active=True,
             )
             self.db.add(mandi)
@@ -207,7 +230,10 @@ class DatabaseSeeder:
             created += 1
         
         self.db.commit()
-        logger.info(f"Created {created} new mandis")
+        logger.info(
+            f"Created {created} new mandis "
+            f"({geocoded} successfully geocoded, {created - geocoded} without coordinates)"
+        )
     
     def _seed_prices(self, records: list[dict]):
         """Create price history records."""
@@ -336,7 +362,7 @@ class DatabaseSeeder:
             # So clearing cache is fine IF we query DB on cache miss.
             # For performance, keeping cache is better, but memory usage? 6000 records * small object. Fine.
             # "created" counter usage for commit:
-            if created % 500 == 0:
+            if created > 0 and created % 500 == 0:
                 self.db.commit()
                 logger.info(f"Progress: {created} prices created...")
         

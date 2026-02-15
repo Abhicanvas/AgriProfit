@@ -121,6 +121,21 @@ class PriceHistory(Base):
             "idx_price_history_date",
             text("price_date DESC"),
         ),
+        # Index for window function queries (LAG, FIRST_VALUE, LAST_VALUE)
+        # Used by get_current_prices_list and transport comparisons
+        Index(
+            "idx_price_history_commodity_mandi_date",
+            text("commodity_id"),
+            text("mandi_id"),
+            text("price_date DESC"),
+        ),
+        # Index for batch price aggregation by commodity and date
+        # Used by _get_commodity_prices_from_db
+        Index(
+            "idx_price_history_commodity_date",
+            text("commodity_id"),
+            text("price_date"),
+        ),
     )
 
     def __repr__(self) -> str:

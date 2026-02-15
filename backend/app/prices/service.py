@@ -193,80 +193,146 @@ class PriceHistoryService:
         state: str | None = None,
         limit: int = 100
     ) -> list[dict]:
-        """Get latest prices with commodity and mandi details and price changes."""
-        from app.models import Commodity, Mandi
-        from datetime import datetime, timedelta
-        from sqlalchemy import func
+        """Get latest prices with commodity and mandi details and price changes.
 
-        # Get latest prices with commodity unit info
-        query = (
-            self.db.query(
-                PriceHistory.id,
-                Commodity.name.label("commodity"),
-                Commodity.id.label("commodity_id"),
-                Commodity.unit.label("commodity_unit"),
-                Mandi.name.label("mandi_name"),
-                Mandi.id.label("mandi_id"),
-                Mandi.state,
-                Mandi.district,
-                PriceHistory.modal_price.label("price"),
-                PriceHistory.price_date,
-                PriceHistory.created_at.label("updated_at")
-            )
-            .join(Commodity, PriceHistory.commodity_id == Commodity.id)
-            .join(Mandi, PriceHistory.mandi_id == Mandi.id)
-        )
+        Uses DISTINCT ON to get the latest price per commodity+mandi pair,
+        then a second lookup for previous price. Restricted to last 7 days
+        to avoid scanning the full 25M-row table.
+        """
+        from sqlalchemy import text
 
+        # Build dynamic WHERE clauses
+        conditions = []
+        params: dict = {"limit": limit}
         if commodity:
-            query = query.filter(Commodity.name.ilike(f"%{commodity}%"))
-        
+            conditions.append("c.name ILIKE :commodity")
+            params["commodity"] = f"%{commodity}%"
         if state and state.lower() != "all":
-            query = query.filter(Mandi.state.ilike(f"%{state}%"))
+            conditions.append("m.state ILIKE :state")
+            params["state"] = f"%{state}%"
 
-        # Order by date desc (latest first)
-        results = query.order_by(PriceHistory.price_date.desc()).limit(limit).all()
+        where_clause = (" AND " + " AND ".join(conditions)) if conditions else ""
 
-        # Calculate price changes with unit-aware conversion and outlier detection
+        # Use DISTINCT ON to get the latest price per commodity+mandi,
+        # then a lateral subquery for the previous price. Only scan last 14 days.
+        query = text(f"""
+            WITH latest AS (
+                SELECT DISTINCT ON (ph.commodity_id, ph.mandi_id)
+                    ph.id,
+                    ph.commodity_id,
+                    ph.mandi_id,
+                    ph.modal_price AS price,
+                    ph.min_price,
+                    ph.max_price,
+                    ph.price_date,
+                    ph.created_at AS updated_at
+                FROM price_history ph
+                WHERE ph.price_date >= CURRENT_DATE - INTERVAL '14 days'
+                  AND ph.mandi_id IS NOT NULL
+                ORDER BY ph.commodity_id, ph.mandi_id, ph.price_date DESC
+            )
+            SELECT
+                l.id,
+                c.name AS commodity,
+                l.commodity_id,
+                m.name AS mandi_name,
+                l.mandi_id,
+                m.state,
+                m.district,
+                l.price,
+                l.min_price,
+                l.max_price,
+                l.price_date,
+                l.updated_at,
+                prev.modal_price AS prev_price,
+                avg_7d.avg_price AS avg_7d_price,
+                range_30d.min_price_30d,
+                range_30d.max_price_30d
+            FROM latest l
+            JOIN commodities c ON c.id = l.commodity_id
+            JOIN mandis m ON m.id = l.mandi_id
+            LEFT JOIN LATERAL (
+                SELECT ph2.modal_price
+                FROM price_history ph2
+                WHERE ph2.commodity_id = l.commodity_id
+                  AND ph2.mandi_id = l.mandi_id
+                  AND ph2.price_date < l.price_date
+                  AND ph2.price_date >= l.price_date - INTERVAL '7 days'
+                ORDER BY ph2.price_date DESC
+                LIMIT 1
+            ) prev ON true
+            LEFT JOIN LATERAL (
+                SELECT AVG(ph3.modal_price) AS avg_price
+                FROM price_history ph3
+                WHERE ph3.commodity_id = l.commodity_id
+                  AND ph3.mandi_id = l.mandi_id
+                  AND ph3.price_date >= l.price_date - INTERVAL '7 days'
+                  AND ph3.price_date <= l.price_date
+            ) avg_7d ON true
+            LEFT JOIN LATERAL (
+                SELECT 
+                    MIN(ph4.modal_price) AS min_price_30d,
+                    MAX(ph4.modal_price) AS max_price_30d
+                FROM price_history ph4
+                WHERE ph4.commodity_id = l.commodity_id
+                  AND ph4.mandi_id = l.mandi_id
+                  AND ph4.price_date >= l.price_date - INTERVAL '30 days'
+                  AND ph4.price_date <= l.price_date
+            ) range_30d ON true
+            WHERE 1=1 {where_clause}
+            ORDER BY l.price_date DESC
+            LIMIT :limit
+        """)
+
+        results = self.db.execute(query, params).fetchall()
+
         price_data = []
         for r in results:
-            # Detect and fix inconsistent unit data
+            # Prices are in ₹ per quintal (100 kg) as received from data.gov.in
             price = float(r.price)
-            
-            # Convert to quintal terms for consistency
-            # Parquet data (until Oct 30) is in quintal, database data is in per kg
-            # If price is low (< 200), multiply by 100 to convert kg to quintal
-            if price < 200:
-                current_price = price * 100
-            else:
-                current_price = price
-            
-            # Get previous day price for this commodity at this mandi
-            prev_price_query = (
-                self.db.query(PriceHistory.modal_price)
-                .filter(
-                    PriceHistory.commodity_id == r.commodity_id,
-                    PriceHistory.mandi_id == r.mandi_id,
-                    PriceHistory.price_date < r.price_date
-                )
-                .order_by(PriceHistory.price_date.desc())
-                .first()
-            )
-            
+            current_price = price
+
+            # Calculate price range
+            min_price = float(r.min_price) if r.min_price else current_price
+            min_price_adj = min_price
+            max_price = float(r.max_price) if r.max_price else current_price
+            max_price_adj = max_price
+
+            # Calculate 7-day average
+            avg_7d = None
+            if r.avg_7d_price is not None:
+                avg_raw = float(r.avg_7d_price)
+                avg_7d = avg_raw
+
+            # Calculate 30-day range
+            min_30d = None
+            max_30d = None
+            if r.min_price_30d is not None:
+                min_raw = float(r.min_price_30d)
+                min_30d = min_raw
+            if r.max_price_30d is not None:
+                max_raw = float(r.max_price_30d)
+                max_30d = max_raw
+
+            # Calculate trend vs 7-day average
+            trend = "stable"
+            if avg_7d and avg_7d > 0:
+                diff_percent = ((current_price - avg_7d) / avg_7d) * 100
+                if diff_percent > 3:
+                    trend = "up"
+                elif diff_percent < -3:
+                    trend = "down"
+
             change_percent = 0.0
             change_amount = 0.0
-            
-            if prev_price_query:
-                # Apply same conversion logic to previous price
-                prev_price_raw = float(prev_price_query.modal_price)
-                if prev_price_raw < 200:
-                    prev_price = prev_price_raw * 100
-                else:
-                    prev_price = prev_price_raw
-                    
+
+            if r.prev_price is not None:
+                prev_raw = float(r.prev_price)
+                prev_price = prev_raw
                 if prev_price > 0:
                     change_amount = current_price - prev_price
                     change_percent = (change_amount / prev_price) * 100
-            
+
             price_data.append({
                 "id": r.id,
                 "commodity_id": r.commodity_id,
@@ -274,7 +340,13 @@ class PriceHistoryService:
                 "mandi_name": r.mandi_name,
                 "state": r.state,
                 "district": r.district,
-                "price_per_kg": current_price,
+                "price_per_quintal": round(current_price, 2),
+                "min_price": round(min_price_adj, 2),
+                "max_price": round(max_price_adj, 2),
+                "avg_7d": round(avg_7d, 2) if avg_7d else None,
+                "min_30d": round(min_30d, 2) if min_30d else None,
+                "max_30d": round(max_30d, 2) if max_30d else None,
+                "trend": trend,
                 "change_percent": round(change_percent, 2),
                 "change_amount": round(change_amount, 2),
                 "updated_at": r.updated_at
@@ -330,13 +402,8 @@ class PriceHistoryService:
         normalized_data = {}
         for record in records:
             date_key = record.price_date
+            # Prices are in per quintal
             price = float(record.modal_price)
-            
-            # Convert to quintal terms for consistency
-            # Parquet data (until Oct 30) is in quintal, database data is in per kg
-            # If price is low (< 200), multiply by 100 to convert kg to quintal
-            if price < 200:
-                price = price * 100
             
             # Group by date and calculate average
             if date_key not in normalized_data:
@@ -353,37 +420,82 @@ class PriceHistoryService:
         ]
 
     def get_top_movers(self, limit: int = 5) -> dict:
-        """Get top gainers and losers based on price change."""
-        # For MVP, we'll fetch latest prices and simulate change if valid historical comparison is complex/slow
-        # In a real app, this would be a complex query comparing Avg(Price_Today) vs Avg(Price_Yesterday)
+        """Get top gainers and losers based on ACTUAL price change from recent data."""
+        from datetime import date, timedelta
+        from sqlalchemy import text
         
-        current_prices = self.get_current_prices_list(limit=100)
+        # Calculate average prices for today and 7 days ago (to have more stable comparison)
+        query = text("""
+            WITH recent_prices AS (
+                SELECT 
+                    c.id as commodity_id,
+                    c.name as commodity,
+                    ph.price_date,
+                    AVG(ph.modal_price) as avg_price
+                FROM price_history ph
+                JOIN commodities c ON c.id = ph.commodity_id
+                WHERE ph.price_date >= CURRENT_DATE - INTERVAL '14 days'
+                  AND ph.modal_price IS NOT NULL
+                GROUP BY c.id, c.name, ph.price_date
+            ),
+            latest_avg AS (
+                SELECT 
+                    commodity_id,
+                    commodity,
+                    AVG(avg_price) as current_price
+                FROM recent_prices
+                WHERE price_date >= CURRENT_DATE - INTERVAL '3 days'
+                GROUP BY commodity_id, commodity
+                HAVING COUNT(*) >= 1
+            ),
+            previous_avg AS (
+                SELECT 
+                    commodity_id,
+                    commodity,
+                    AVG(avg_price) as previous_price
+                FROM recent_prices
+                WHERE price_date >= CURRENT_DATE - INTERVAL '14 days'
+                  AND price_date < CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY commodity_id, commodity
+                HAVING COUNT(*) >= 1
+            )
+            SELECT 
+                l.commodity,
+                l.current_price,
+                p.previous_price,
+                CASE 
+                    WHEN p.previous_price > 0 THEN
+                        ROUND(((l.current_price - p.previous_price) / p.previous_price * 100)::numeric, 2)
+                    ELSE 0
+                END as change_percent
+            FROM latest_avg l
+            INNER JOIN previous_avg p ON l.commodity_id = p.commodity_id
+            WHERE p.previous_price > 0
+            ORDER BY change_percent DESC
+        """)
         
-        # Calculate/Simulate change
-        # We'll use a deterministic "random" change based on price value for demo purposes if change is 0
+        results = self.db.execute(query).fetchall()
+        
         movers = []
-        import random
-        
-        for p in current_prices:
-            # If we had real change data, we'd use it. For now, simulate variance for the UI.
-            # Use hash of name to keep it consistent per refresh if data doesn't change
-            seed = sum(ord(c) for c in p["commodity"])
-            # Use local Random instance to avoid polluting global state
-            rng = random.Random(seed)
-            
-            # Simulate a change between -15% and +15%
-            change_pct = (rng.random() * 30) - 15
+        for r in results:
+            # Prices are in per quintal
+            price = float(r.current_price)
             
             movers.append({
-                "commodity": p["commodity"],
-                "price": p["price_per_kg"],
-                "change_percent": round(change_pct, 2)
+                "commodity": r.commodity,
+                "price": round(price, 2),
+                "change_percent": float(r.change_percent)
             })
-            
-        # Sort by change percent
-        movers.sort(key=lambda x: x["change_percent"], reverse=True)
+        
+        # Split into positive and negative changes
+        gainers = [m for m in movers if m["change_percent"] > 0]
+        losers = [m for m in movers if m["change_percent"] < 0]
+        
+        # Sort for consistent ordering
+        gainers.sort(key=lambda x: x["change_percent"], reverse=True)
+        losers.sort(key=lambda x: x["change_percent"])
         
         return {
-            "gainers": movers[:limit],
-            "losers": movers[-limit:]
+            "gainers": gainers[:limit],  # Top gainers with highest positive changes
+            "losers": losers[:limit]  # Top losers with most negative changes
         }

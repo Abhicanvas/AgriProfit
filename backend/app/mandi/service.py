@@ -156,6 +156,12 @@ class MandiService:
         # Get mandis
         mandis = query.offset(skip).limit(limit).all()
         
+        # Batch fetch top prices for all mandis (OPTIMIZED - Single Query)
+        # This eliminates the N+1 query problem where we were calling get_mandi_top_prices()
+        # for each mandi individually. Now we fetch all prices in one query.
+        mandi_ids = [mandi.id for mandi in mandis]
+        batch_top_prices = self.get_batch_top_prices(mandi_ids, limit_per_mandi=3)
+        
         # Enrich with distance and other data
         result_mandis = []
         for mandi in mandis:
@@ -168,8 +174,8 @@ class MandiService:
                     total -= 1
                     continue
             
-            # Get current commodity prices at this mandi
-            top_prices = self.get_mandi_top_prices(mandi.id, limit=3)
+            # Get pre-fetched top prices (no additional query needed!)
+            top_prices = batch_top_prices.get(mandi.id, [])
             
             result_mandis.append({
                 "id": str(mandi.id),
@@ -250,14 +256,83 @@ class MandiService:
             {
                 "commodity_id": str(p.commodity_id),
                 "commodity_name": p.commodity_name,
-                "unit": p.unit,
-                "modal_price": float(p.modal_price),
-                "min_price": float(p.min_price) if p.min_price else None,
-                "max_price": float(p.max_price) if p.max_price else None,
+                "unit": "quintal",
+                "modal_price": round(float(p.modal_price), 2),
+                "min_price": round(float(p.min_price), 2) if p.min_price else None,
+                "max_price": round(float(p.max_price), 2) if p.max_price else None,
                 "as_of": str(p.price_date),
             }
             for p in prices
         ]
+
+    def get_batch_top_prices(self, mandi_ids: list[UUID], limit_per_mandi: int = 3) -> dict[UUID, list[dict]]:
+        """Get top commodity prices for multiple mandis in a single query (OPTIMIZED).
+        
+        This method eliminates the N+1 query problem by fetching top prices for all mandis
+        in a single database query instead of querying each mandi individually.
+        
+        Args:
+            mandi_ids: List of mandi UUIDs to fetch prices for
+            limit_per_mandi: Maximum number of top prices to return per mandi
+            
+        Returns:
+            Dictionary mapping mandi_id to list of top price dictionaries
+        """
+        if not mandi_ids:
+            return {}
+        
+        # Subquery to get the latest price date for each commodity at each mandi
+        subquery = self.db.query(
+            PriceHistory.mandi_id,
+            PriceHistory.commodity_id,
+            func.max(PriceHistory.price_date).label("max_date")
+        ).filter(
+            PriceHistory.mandi_id.in_(mandi_ids)
+        ).group_by(
+            PriceHistory.mandi_id,
+            PriceHistory.commodity_id
+        ).subquery()
+        
+        # Get the actual price records
+        prices = self.db.query(
+            PriceHistory.mandi_id,
+            PriceHistory.commodity_id,
+            Commodity.name.label("commodity_name"),
+            Commodity.unit.label("unit"),
+            PriceHistory.modal_price,
+            PriceHistory.min_price,
+            PriceHistory.max_price,
+            PriceHistory.price_date
+        ).join(
+            subquery,
+            (PriceHistory.mandi_id == subquery.c.mandi_id) &
+            (PriceHistory.commodity_id == subquery.c.commodity_id) &
+            (PriceHistory.price_date == subquery.c.max_date)
+        ).join(
+            Commodity, PriceHistory.commodity_id == Commodity.id
+        ).order_by(
+            PriceHistory.mandi_id,
+            desc(PriceHistory.modal_price)
+        ).all()
+        
+        # Group by mandi_id and limit per mandi
+        result = {}
+        for mandi_id in mandi_ids:
+            result[mandi_id] = []
+        
+        for p in prices:
+            if len(result[p.mandi_id]) < limit_per_mandi:
+                result[p.mandi_id].append({
+                    "commodity_id": str(p.commodity_id),
+                    "commodity_name": p.commodity_name,
+                    "unit": "quintal",
+                    "modal_price": round(float(p.modal_price), 2),
+                    "min_price": round(float(p.min_price), 2) if p.min_price else None,
+                    "max_price": round(float(p.max_price), 2) if p.max_price else None,
+                    "as_of": str(p.price_date),
+                })
+        
+        return result
 
     def get_details(self, mandi_id: UUID, user_lat: float | None = None, user_lon: float | None = None) -> dict | None:
         """Get detailed information about a mandi with prices and facilities."""
@@ -276,17 +351,33 @@ class MandiService:
         # Get price trends (last 30 days trend)
         thirty_days_ago = datetime.now().date() - timedelta(days=30)
         
+        # Batch fetch old prices for all commodities (OPTIMIZED - Single Query)
+        # This eliminates the N+1 query problem in price trend calculation
+        commodity_ids = [p["commodity_id"] for p in current_prices]
+        
+        if commodity_ids:
+            old_prices_query = self.db.query(
+                PriceHistory.commodity_id,
+                func.avg(PriceHistory.modal_price).label("avg_price")
+            ).filter(
+                PriceHistory.mandi_id == mandi_id,
+                PriceHistory.commodity_id.in_(commodity_ids),
+                PriceHistory.price_date <= thirty_days_ago
+            ).group_by(PriceHistory.commodity_id).all()
+            
+            old_prices_map = {str(row.commodity_id): row.avg_price for row in old_prices_query}
+        else:
+            old_prices_map = {}
+        
         price_trends = []
         for price_item in current_prices:
-            old_price = self.db.query(func.avg(PriceHistory.modal_price)).filter(
-                PriceHistory.mandi_id == mandi_id,
-                PriceHistory.commodity_id == price_item["commodity_id"],
-                PriceHistory.price_date <= thirty_days_ago
-            ).scalar()
+            old_price_quintal = old_prices_map.get(price_item["commodity_id"])
             
             change = None
-            if old_price and old_price > 0:
-                change = round(((price_item["modal_price"] - float(old_price)) / float(old_price)) * 100, 2)
+            if old_price_quintal and old_price_quintal > 0:
+                # Convert old price from quintal to kg
+                old_price_kg = float(old_price_quintal) / 100
+                change = round(((price_item["modal_price"] - old_price_kg) / old_price_kg) * 100, 2)
             
             price_trends.append({
                 **price_item,

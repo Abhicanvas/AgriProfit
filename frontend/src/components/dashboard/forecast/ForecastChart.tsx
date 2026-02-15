@@ -1,21 +1,22 @@
 "use client"
 
 import React from "react"
-import {
-    ComposedChart,
-    Line,
-    Area,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    ReferenceLine,
-    Legend
-} from "recharts"
+import dynamic from "next/dynamic"
 import { ForecastPoint } from "@/services/forecasts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+
+// Dynamic import recharts for code splitting
+const ComposedChart = dynamic(() => import("recharts").then(m => m.ComposedChart), { ssr: false })
+const Line = dynamic(() => import("recharts").then(m => m.Line), { ssr: false })
+const Area = dynamic(() => import("recharts").then(m => m.Area), { ssr: false })
+const XAxis = dynamic(() => import("recharts").then(m => m.XAxis), { ssr: false })
+const YAxis = dynamic(() => import("recharts").then(m => m.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import("recharts").then(m => m.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip), { ssr: false })
+const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer), { ssr: false })
+const ReferenceLine = dynamic(() => import("recharts").then(m => m.ReferenceLine), { ssr: false })
+const Legend = dynamic(() => import("recharts").then(m => m.Legend), { ssr: false })
 
 interface ForecastChartProps {
     data: ForecastPoint[]

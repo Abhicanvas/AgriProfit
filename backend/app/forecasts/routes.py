@@ -8,13 +8,12 @@ This module provides endpoints for:
 """
 from datetime import date, datetime, timedelta
 from uuid import UUID
-import random
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.models import User
+from app.models import User, Commodity
 from app.forecasts.schemas import (
     PriceForecastCreate, PriceForecastUpdate,
     PriceForecastResponse, PriceForecastListResponse,
@@ -25,104 +24,104 @@ from app.auth.security import get_current_user, require_role
 router = APIRouter(prefix="/forecasts", tags=["Forecasts"])
 
 
-# =============================================================================
-# FRONTEND-COMPATIBLE FORECAST ENDPOINT (Mock ML predictions)
-# =============================================================================
-
 @router.get(
     "",
     status_code=status.HTTP_200_OK,
     summary="Get Price Forecasts",
-    description="Get ML-powered price forecasts for a commodity. Returns predictions with confidence levels.",
+    description="Get price forecasts for a commodity from the database. Returns real predictions only.",
 )
 async def get_price_forecasts(
     commodity: str = Query(default="Rice", description="Commodity name"),
     days: int = Query(default=30, ge=1, le=90, description="Number of days to forecast"),
+    db: Session = Depends(get_db),
 ):
     """
-    Generate price forecasts for a commodity.
-    
-    Returns AI-powered predictions with confidence scores and recommendations.
-    This endpoint is optimized for the frontend dashboard.
+    Get price forecasts for a commodity from the database.
+
+    Returns only real forecast data. If no forecasts exist, returns an empty
+    result with a message indicating forecasts are not yet available.
     """
-    today = datetime.now()
-    forecasts = []
-    current_price = random.uniform(25.0, 45.0)  # Base price varies by commodity
-    
-    # Simulate a trend
-    trend_direction = random.choice([-1, 1])
-    trend_strength = random.uniform(0.1, 0.5)
-    
-    peak_price = current_price
-    peak_date = today.strftime("%Y-%m-%d")
-    
-    for i in range(1, days + 1):
-        forecast_date = today + timedelta(days=i)
-        
-        # Add some randomness with trend
-        daily_change = (random.random() - 0.45) * 2 + (trend_direction * trend_strength * 0.1)
-        predicted = current_price + daily_change
-        predicted = max(10.0, min(100.0, predicted))  # Clamp to reasonable range
-        
-        # Update peak tracking
-        if predicted > peak_price:
-            peak_price = predicted
-            peak_date = forecast_date.strftime("%Y-%m-%d")
-        
-        # Confidence decreases with distance
-        if i <= 7:
+    # Look up the commodity
+    commodity_obj = db.query(Commodity).filter(
+        Commodity.name.ilike(f"%{commodity}%")
+    ).first()
+
+    if not commodity_obj:
+        return {
+            "commodity": commodity,
+            "current_price": None,
+            "forecasts": [],
+            "summary": None,
+            "message": f"Commodity '{commodity}' not found in the database.",
+        }
+
+    # Query real forecasts from the database
+    service = PriceForecastService(db)
+    today = datetime.now().date()
+    end_date = today + timedelta(days=days)
+
+    forecasts = service.get_by_commodity(
+        commodity_id=commodity_obj.id,
+        start_date=today,
+        end_date=end_date,
+        limit=days,
+    )
+
+    if not forecasts:
+        return {
+            "commodity": commodity,
+            "current_price": None,
+            "forecasts": [],
+            "summary": None,
+            "message": "No forecast data available for this commodity. Forecasts will appear once ML models generate predictions.",
+        }
+
+    # Format real forecast data for the frontend
+    forecast_list = []
+    for f in forecasts:
+        confidence_level = f.confidence_level or 0
+        if confidence_level >= 0.8:
             confidence = "HIGH"
-            confidence_percent = random.uniform(85, 95)
-        elif i <= 21:
+        elif confidence_level >= 0.5:
             confidence = "MEDIUM"
-            confidence_percent = random.uniform(65, 84)
         else:
             confidence = "LOW"
-            confidence_percent = random.uniform(50, 64)
-        
-        # Recommendation based on predicted change
-        if predicted > current_price * 1.05:
-            recommendation = "SELL"
-        elif predicted < current_price * 0.95:
-            recommendation = "WAIT"
-        else:
-            recommendation = "HOLD"
-        
-        forecasts.append({
-            "date": forecast_date.strftime("%Y-%m-%d"),
-            "predicted_price": round(predicted, 2),
+
+        forecast_list.append({
+            "date": f.forecast_date.strftime("%Y-%m-%d"),
+            "predicted_price": float(f.predicted_price),
             "confidence": confidence,
-            "confidence_percent": round(confidence_percent, 1),
-            "lower_bound": round(predicted * 0.92, 2),
-            "upper_bound": round(predicted * 1.08, 2),
-            "recommendation": recommendation,
+            "confidence_percent": round(confidence_level * 100, 1),
+            "lower_bound": round(float(f.predicted_price) * 0.95, 2),
+            "upper_bound": round(float(f.predicted_price) * 1.05, 2),
+            "recommendation": "HOLD",
         })
-        
-        current_price = predicted
-    
-    # Determine overall trend
-    if forecasts[-1]["predicted_price"] > forecasts[0]["predicted_price"] * 1.02:
+
+    # Calculate summary from real data
+    prices = [fp["predicted_price"] for fp in forecast_list]
+    peak_price = max(prices)
+    peak_idx = prices.index(peak_price)
+
+    if prices[-1] > prices[0] * 1.02:
         trend = "INCREASING"
-    elif forecasts[-1]["predicted_price"] < forecasts[0]["predicted_price"] * 0.98:
+    elif prices[-1] < prices[0] * 0.98:
         trend = "DECREASING"
     else:
         trend = "STABLE"
-    
-    # Find best sell window (highest prices)
-    sorted_forecasts = sorted(forecasts, key=lambda x: x["predicted_price"], reverse=True)
-    best_start = sorted_forecasts[0]["date"]
-    best_end = sorted_forecasts[min(6, len(sorted_forecasts)-1)]["date"]
-    
+
     return {
         "commodity": commodity,
-        "current_price": round(forecasts[0]["predicted_price"], 2),
-        "forecasts": forecasts,
+        "current_price": forecast_list[0]["predicted_price"],
+        "forecasts": forecast_list,
         "summary": {
             "trend": trend,
-            "peak_date": peak_date,
-            "peak_price": round(peak_price, 2),
-            "best_sell_window": [best_start, best_end],
-        }
+            "peak_date": forecast_list[peak_idx]["date"],
+            "peak_price": peak_price,
+            "best_sell_window": [
+                forecast_list[peak_idx]["date"],
+                forecast_list[min(peak_idx + 6, len(forecast_list) - 1)]["date"],
+            ],
+        },
     }
 
 
@@ -188,10 +187,10 @@ async def get_latest_forecast(
     "/{commodity_id}",
     status_code=status.HTTP_200_OK,
     summary="Get Forecasts by Commodity or Forecast ID",
-    description="Get forecasts for a commodity UUID or forecast ID. Returns ML-generated predictions if no database records exist. Public endpoint.",
+    description="Get forecasts for a commodity UUID or forecast ID. Returns only real database records. Public endpoint.",
     responses={
         200: {"description": "Forecast(s) found"},
-        404: {"description": "Invalid commodity ID"},
+        404: {"description": "Commodity not found"},
     }
 )
 async def get_forecast_by_id_or_commodity(
@@ -200,24 +199,20 @@ async def get_forecast_by_id_or_commodity(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=100),
-    days: int = Query(default=30, ge=1, le=90, description="Days to forecast (for mock predictions)"),
 ):
     """
     Get forecasts by commodity ID or forecast ID.
-    
+
     First tries to find database records by forecast ID, then by commodity ID.
-    If no database records exist, generates mock ML predictions for better UX.
-    This allows the endpoint to always return useful data.
+    Returns an empty list if no forecasts exist (no fake data is generated).
     """
-    from app.models import Commodity
-    
     service = PriceForecastService(db)
-    
+
     # Try as forecast ID first (database record)
     forecast = service.get_by_id(commodity_id)
     if forecast:
         return [forecast]
-    
+
     # Try as commodity ID (database records)
     forecasts = service.get_by_commodity(
         commodity_id=commodity_id,
@@ -225,66 +220,20 @@ async def get_forecast_by_id_or_commodity(
         end_date=end_date,
         limit=limit,
     )
-    
+
     if forecasts:
         return forecasts
-    
-    # No database records - check if commodity exists and generate mock predictions
+
+    # Verify the commodity exists
     commodity = db.query(Commodity).filter(Commodity.id == commodity_id).first()
     if not commodity:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Commodity not found"
         )
-    
-    # Generate mock ML predictions (same logic as root /forecasts endpoint)
-    today = datetime.now()
-    mock_forecasts = []
-    current_price = random.uniform(25.0, 45.0)
-    trend_direction = random.choice([-1, 1])
-    trend_strength = random.uniform(0.1, 0.5)
-    
-    for i in range(1, days + 1):
-        forecast_date = today + timedelta(days=i)
-        daily_change = (random.random() - 0.45) * 2 + (trend_direction * trend_strength * 0.1)
-        predicted = current_price + daily_change
-        predicted = max(10.0, min(100.0, predicted))
-        
-        if i <= 7:
-            confidence = "HIGH"
-            confidence_percent = random.uniform(85, 95)
-        elif i <= 21:
-            confidence = "MEDIUM"
-            confidence_percent = random.uniform(65, 84)
-        else:
-            confidence = "LOW"
-            confidence_percent = random.uniform(50, 64)
-        
-        if predicted > current_price * 1.05:
-            recommendation = "SELL"
-        elif predicted < current_price * 0.95:
-            recommendation = "WAIT"
-        else:
-            recommendation = "HOLD"
-        
-        mock_forecasts.append({
-            "commodity_name": commodity.name,
-            "date": forecast_date.strftime("%Y-%m-%d"),
-            "predicted_price": round(predicted, 2),
-            "confidence": confidence,
-            "confidence_percent": round(confidence_percent, 1),
-            "lower_bound": round(predicted * 0.92, 2),
-            "upper_bound": round(predicted * 1.08, 2),
-            "recommendation": recommendation,
-            "model_version": "ml_v1_mock",
-        })
-    
-    return mock_forecasts
 
-
-# NOTE: The main GET /forecasts endpoint is defined at the top of this file
-# with get_price_forecasts() which returns mock ML predictions for the frontend.
-# The old list_forecasts endpoint has been removed to avoid route conflicts.
+    # No forecasts available - return empty list (no fake data)
+    return []
 
 
 @router.get(

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -44,7 +44,6 @@ const Legend = dynamic(() => import("recharts").then((mod) => mod.Legend), { ssr
 const ResponsiveContainer = dynamic(() => import("recharts").then((mod) => mod.ResponsiveContainer), { ssr: false });
 
 const CHART_COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316", "#A855F7", "#22D3EE"];
-const KERALA_DISTRICTS = ["Thiruvananthapuram", "Kollam", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
 const COMMODITIES = [
   // Grains & Cereals
   "Rice", "Wheat", "Maize", "Bajra", "Jowar", "Barley", "Ragi",
@@ -62,7 +61,7 @@ const COMMODITIES = [
 
 // Price Trends Tab - Enhanced with searchable dropdown
 function PriceTrendsTab({ dashboardData, pricesData, isLoading }: { dashboardData: DashboardData | undefined; pricesData: any; isLoading: boolean }) {
-  const [timeRange, setTimeRange] = useState<"7" | "14" | "30" | "90">("14");
+  const [timeRange, setTimeRange] = useState<"7" | "14" | "30" | "90">("30");
   const [selectedCommodities, setSelectedCommodities] = useState<string[]>(["Rice", "Wheat", "Tomato"]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -104,52 +103,85 @@ function PriceTrendsTab({ dashboardData, pricesData, isLoading }: { dashboardDat
     }
   };
 
+  // Fetch real historical price data for selected commodities
+  const { data: historicalData, isLoading: histLoading } = useQuery({
+    queryKey: ["price-trends-historical", selectedCommodities, timeRange],
+    queryFn: async () => {
+      const results = await Promise.all(
+        selectedCommodities.map(async (commodity) => {
+          try {
+            const response = await pricesService.getHistoricalPrices({
+              commodity,
+              mandi_id: "all",
+              days: parseInt(timeRange),
+            });
+            return { commodity, data: response.data || [] };
+          } catch {
+            return { commodity, data: [] };
+          }
+        })
+      );
+      return results;
+    },
+    staleTime: 60000,
+  });
+
   const priceTrendsData = useMemo(() => {
-    const days = parseInt(timeRange);
-    return Array.from({ length: days }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - 1 - i));
-      const entry: Record<string, string | number> = {
-        date: date.toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-      };
-      selectedCommodities.forEach((c, idx) => {
-        // Generate base prices for common commodities
-        const basePrices: Record<string, number> = {
-          Rice: 54, Wheat: 38, Tomato: 42, Onion: 35, Potato: 28, Banana: 45,
-          Coconut: 32, Pepper: 380, Cardamom: 1200, Rubber: 165, Apple: 120,
-          Mango: 80, Orange: 60, Grapes: 90, Maize: 25, Bajra: 28, Jowar: 30,
-          Turmeric: 95, Ginger: 85, Garlic: 120, Coffee: 220, Tea: 180,
+    if (!historicalData) return [];
+
+    // Build a date -> commodity prices map
+    const dateMap: Record<string, Record<string, number>> = {};
+    for (const { commodity, data } of historicalData) {
+      for (const point of data) {
+        const dateStr = new Date(point.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+        if (!dateMap[point.date]) dateMap[point.date] = { _raw: 0 } as any;
+        (dateMap[point.date] as any)._raw = point.date;
+        dateMap[point.date][commodity] = point.price;
+      }
+    }
+
+    // Sort by raw date and format
+    return Object.entries(dateMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([rawDate, values]) => {
+        const entry: Record<string, string | number> = {
+          date: new Date(rawDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
         };
-        const basePrice = basePrices[c] || (40 + Math.abs(c.charCodeAt(0) % 50));
-        entry[c] = basePrice + Math.sin(i * 0.3 + idx) * (basePrice * 0.08) + (Math.random() - 0.5) * (basePrice * 0.04);
+        for (const commodity of selectedCommodities) {
+          if (values[commodity] !== undefined) {
+            entry[commodity] = values[commodity];
+          }
+        }
+        return entry;
       });
-      return entry;
-    });
-  }, [timeRange, selectedCommodities]);
+  }, [historicalData, selectedCommodities]);
 
-  // Extended commodity list for price table - uses displayCount for pagination
+  // Fetch real current prices for the price table
+  const { data: currentPricesForTable } = useQuery({
+    queryKey: ["analytics-current-prices"],
+    queryFn: () => pricesService.getCurrentPrices(),
+    staleTime: 60000,
+  });
+
   const allCommoditiesData = useMemo(() => {
-    const baseData = allCommodities?.slice(0, displayCount) || [];
-    return baseData.map((c: any) => {
-      const basePrice = 40 + Math.abs((c.name?.charCodeAt(0) || 65) % 100);
-      return {
-        name: c.name,
-        category: c.category || "General",
-        currentPrice: basePrice + (Math.random() - 0.5) * basePrice * 0.1,
-        minPrice: basePrice * 0.85 + Math.random() * basePrice * 0.05,
-        maxPrice: basePrice * 1.1 + Math.random() * basePrice * 0.05,
-        change: (Math.random() - 0.5) * 15,
-        volume: Math.floor(Math.random() * 500 + 100),
-        mandi: ["Central Mandi", "Ernakulam APMC", "Thrissur Market", "Palakkad Mandi"][Math.floor(Math.random() * 4)],
-      };
-    });
-  }, [allCommodities, displayCount]);
+    const prices = currentPricesForTable?.prices || [];
+    return prices.slice(0, displayCount).map((p: any) => ({
+      name: p.commodity,
+      category: "Market",
+      currentPrice: p.price_per_quintal || 0,
+      minPrice: p.min_price || (p.price_per_quintal || 0) * 0.95,
+      maxPrice: p.max_price || (p.price_per_quintal || 0) * 1.05,
+      change: p.change_percent || 0,
+      volume: null,
+      mandi: p.mandi_name || "N/A",
+    }));
+  }, [currentPricesForTable, displayCount]);
 
-  const totalCommodities = allCommodities?.length || 0;
+  const totalCommodities = currentPricesForTable?.prices?.length || 0;
   const hasMore = displayCount < totalCommodities;
   const loadMore = () => setDisplayCount(prev => Math.min(prev + 20, totalCommodities));
 
-  if (isLoading) return <div className="space-y-4"><Skeleton className="h-64 w-full" /><Skeleton className="h-32 w-full" /></div>;
+  if (isLoading || histLoading) return <div className="space-y-4"><Skeleton className="h-64 w-full" /><Skeleton className="h-32 w-full" /></div>;
 
   return (
     <div className="space-y-6">
@@ -272,10 +304,10 @@ function PriceTrendsTab({ dashboardData, pricesData, isLoading }: { dashboardDat
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{item.category}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{item.mandi}</TableCell>
-                    <TableCell className="text-right text-blue-600">₹{item.minPrice.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-semibold">₹{item.currentPrice.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-orange-600">₹{item.maxPrice.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{item.volume}</TableCell>
+                    <TableCell className="text-right text-blue-600">₹{(item.minPrice || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-semibold">₹{(item.currentPrice || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-orange-600">₹{(item.maxPrice || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{item.volume ?? "N/A"}</TableCell>
                     <TableCell className="text-right">
                       <span className={item.change >= 0 ? "text-green-600" : "text-red-600"}>
                         {item.change >= 0 ? <TrendingUp className="inline h-3 w-3 mr-1" /> : <TrendingDown className="inline h-3 w-3 mr-1" />}
@@ -342,7 +374,13 @@ function MandiPerformanceTab({ dashboardData, isLoading }: { dashboardData: Dash
     return filtered;
   }, [mandisData, searchQuery, stateFilter, sortBy]);
 
-  const mandiData = [{ name: "Ernakulam", volume: 12500 }, { name: "Thrissur", volume: 9800 }, { name: "Kozhikode", volume: 8700 }, { name: "Palakkad", volume: 7200 }, { name: "Kannur", volume: 6500 }];
+  // Use real mandi data for the bar chart - showing top mandis by listing count
+  const mandiData = useMemo(() => {
+    if (!mandisData) return [];
+    return mandisData
+      .slice(0, 5)
+      .map((m: any) => ({ name: m.name, volume: m.commodities_accepted?.length || 0 }));
+  }, [mandisData]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -562,11 +600,25 @@ function CropComparisonTab() {
   }, [allCommoditiesForCompare]);
 
   const filteredCrops = useMemo(() => {
-    if (!cropSearchQuery) return allCropNames;
-    return allCropNames.filter((c: string) =>
+    let availableCrops = allCropNames;
+    
+    // If a mandi is selected and we have price data, only show crops with data for that mandi
+    if (selectedMandiId && mandiPrices && mandiPrices.length > 0) {
+      const commodityIdsWithPrices = new Set(mandiPrices.map((p: any) => p.commodity_id));
+      availableCrops = allCropNames.filter((cropName: string) => {
+        const commodity = allCommoditiesForCompare?.find((c: any) => 
+          c.name === cropName || c.name.toLowerCase() === cropName.toLowerCase()
+        );
+        return commodity && commodityIdsWithPrices.has(commodity.id);
+      });
+    }
+    
+    // Apply search filter
+    if (!cropSearchQuery) return availableCrops;
+    return availableCrops.filter((c: string) =>
       c.toLowerCase().includes(cropSearchQuery.toLowerCase())
     );
-  }, [allCropNames, cropSearchQuery]);
+  }, [allCropNames, cropSearchQuery, selectedMandiId, mandiPrices, allCommoditiesForCompare]);
 
   const filteredMandis = useMemo(() => {
     if (!mandiSearchQuery) return allMandis || [];
@@ -658,6 +710,32 @@ function CropComparisonTab() {
   const selectedMandi = useMemo(() => {
     return allMandis?.find((m: any) => m.id === selectedMandiId);
   }, [allMandis, selectedMandiId]);
+
+  // Filter out selected crops that don't have data in the newly selected mandi
+  useEffect(() => {
+    if (selectedMandiId && mandiPrices && mandiPrices.length > 0 && allCommoditiesForCompare) {
+      const commodityIdsWithPrices = new Set(mandiPrices.map((p: any) => p.commodity_id));
+      
+      setSelectedCrops((prevCrops) => {
+        const validCrops = prevCrops.filter((cropName: string) => {
+          const commodity = allCommoditiesForCompare.find((c: any) => 
+            c.name === cropName || c.name.toLowerCase() === cropName.toLowerCase()
+          );
+          return commodity && commodityIdsWithPrices.has(commodity.id);
+        });
+        
+        if (validCrops.length !== prevCrops.length) {
+          if (validCrops.length === 0) {
+            toast.info("Selected crops don't have data for this mandi. Please select new crops.");
+          } else if (validCrops.length < prevCrops.length) {
+            toast.info(`Some crops were removed as they don't have data for this mandi.`);
+          }
+        }
+        
+        return validCrops;
+      });
+    }
+  }, [selectedMandiId, mandiPrices, allCommoditiesForCompare]);
   
   const addCrop = (crop: string) => {
     if (!selectedCrops.includes(crop)) {
@@ -761,6 +839,11 @@ function CropComparisonTab() {
           {/* Crop Selection */}
           <div>
             <Label htmlFor="crop-select">Select Crops to Compare (max 5)</Label>
+            {selectedMandiId && mandiPrices && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Showing only crops with available price data for {selectedMandi?.name || "this mandi"}
+              </p>
+            )}
             <div className="relative mt-2">
               <div className="flex gap-2">
                 <Input
@@ -783,23 +866,33 @@ function CropComparisonTab() {
                   <ChevronDown className={`h-4 w-4 transition-transform ${isCropDropdownOpen ? 'rotate-180' : ''}`} />
                 </Button>
               </div>
-              {(isCropDropdownOpen || cropSearchQuery) && filteredCrops.length > 0 && (
+              {(isCropDropdownOpen || cropSearchQuery) && (
                 <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {filteredCrops.slice(0, 50).map((crop) => (
-                    <div
-                      key={crop}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        addCrop(crop);
-                        setIsCropDropdownOpen(false);
-                      }}
-                    >
-                      {crop}
-                    </div>
-                  ))}
-                  {filteredCrops.length > 50 && (
-                    <div className="px-4 py-2 text-sm text-gray-500 text-center">
-                      Showing first 50 results. Refine your search for more.
+                  {filteredCrops.length > 0 ? (
+                    <>
+                      {filteredCrops.slice(0, 50).map((crop) => (
+                        <div
+                          key={crop}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            addCrop(crop);
+                            setIsCropDropdownOpen(false);
+                          }}
+                        >
+                          {crop}
+                        </div>
+                      ))}
+                      {filteredCrops.length > 50 && (
+                        <div className="px-4 py-2 text-sm text-gray-500 text-center">
+                          Showing first 50 results. Refine your search for more.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                      {selectedMandiId 
+                        ? "No crops with price data found for this mandi" 
+                        : "No crops found matching your search"}
                     </div>
                   )}
                 </div>
@@ -903,8 +996,8 @@ function CropComparisonTab() {
 // Main Page
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState("price-trends");
-  const { data: dashboardData, isLoading: dashboardLoading, refetch } = useQuery({ queryKey: ["analytics-dashboard"], queryFn: () => analyticsService.getDashboard() });
-  const { data: pricesData, isLoading: pricesLoading } = useQuery({ queryKey: ["prices-analytics"], queryFn: () => pricesService.getCurrentPrices() });
+  const { data: dashboardData, isLoading: dashboardLoading, refetch } = useQuery({ queryKey: ["analytics-dashboard"], queryFn: () => analyticsService.getDashboard(), staleTime: 5 * 60 * 1000, gcTime: 10 * 60 * 1000 });
+  const { data: pricesData, isLoading: pricesLoading } = useQuery({ queryKey: ["prices-analytics"], queryFn: () => pricesService.getCurrentPrices(), staleTime: 5 * 60 * 1000, gcTime: 10 * 60 * 1000 });
 
   return (
     <AppLayout>

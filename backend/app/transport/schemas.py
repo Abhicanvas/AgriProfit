@@ -108,33 +108,43 @@ class CostBreakdown(BaseModel):
     """Detailed breakdown of transport costs."""
     transport_cost: float = Field(
         ...,
-        description="Vehicle transport cost based on distance",
-        json_schema_extra={"example": 1680.0}
+        description="Vehicle freight cost (round-trip)",
+        json_schema_extra={"example": 2160.0}
+    )
+    toll_cost: float = Field(
+        ...,
+        description="Highway toll charges (both ways)",
+        json_schema_extra={"example": 400.0}
     )
     loading_cost: float = Field(
         ...,
-        description="Loading charges at source",
-        json_schema_extra={"example": 400.0}
+        description="Loading charges at source (Hamali)",
+        json_schema_extra={"example": 35.0}
     )
     unloading_cost: float = Field(
         ...,
         description="Unloading charges at destination",
-        json_schema_extra={"example": 400.0}
+        json_schema_extra={"example": 30.0}
     )
     mandi_fee: float = Field(
         ...,
-        description="Mandi market fee (2% of gross)",
-        json_schema_extra={"example": 600.0}
+        description="Mandi market fee (1.5% of gross)",
+        json_schema_extra={"example": 450.0}
     )
     commission: float = Field(
         ...,
         description="Agent commission (2.5% of gross)",
         json_schema_extra={"example": 750.0}
     )
+    additional_cost: float = Field(
+        ...,
+        description="Fixed costs per trip (weighbridge, parking, docs)",
+        json_schema_extra={"example": 200.0}
+    )
     total_cost: float = Field(
         ...,
         description="Sum of all costs",
-        json_schema_extra={"example": 3830.0}
+        json_schema_extra={"example": 4025.0}
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -147,7 +157,7 @@ class MandiComparison(BaseModel):
     Contains all details needed to evaluate selling at this mandi
     including distance, pricing, costs, and net profit.
     """
-    mandi_id: UUID = Field(..., description="Mandi unique identifier")
+    mandi_id: UUID | None = Field(None, description="Mandi unique identifier")
     mandi_name: str = Field(..., description="Mandi display name")
     district: str = Field(..., description="District where mandi is located")
     state: str = Field(..., description="State where mandi is located")
@@ -177,18 +187,23 @@ class MandiComparison(BaseModel):
     net_profit: float = Field(
         ...,
         description="Gross revenue minus total costs",
-        json_schema_extra={"example": 26170.0}
+        json_schema_extra={"example": 25975.0}
     )
     profit_per_kg: float = Field(
         ...,
         description="Net profit divided by quantity",
-        json_schema_extra={"example": 26.17}
+        json_schema_extra={"example": 25.98}
+    )
+    roi_percentage: float = Field(
+        ...,
+        description="Return on investment (net profit / total cost * 100)",
+        json_schema_extra={"example": 645.2}
     )
 
     vehicle_type: VehicleType = Field(
         ...,
         description="Recommended vehicle based on quantity",
-        json_schema_extra={"example": "tempo"}
+        json_schema_extra={"example": "TEMPO"}
     )
     vehicle_capacity_kg: int = Field(
         ...,
@@ -199,6 +214,12 @@ class MandiComparison(BaseModel):
         ...,
         description="Number of trips needed for quantity",
         json_schema_extra={"example": 1}
+    )
+
+    recommendation: str = Field(
+        default="recommended",
+        description="Whether selling at this mandi is recommended",
+        json_schema_extra={"example": "recommended"}
     )
 
     model_config = ConfigDict(

@@ -12,7 +12,7 @@ from app.commodities.schemas import CommodityCreate, CommodityUpdate
 
 # Cache for batch price lookups (cache for 30 seconds)
 _price_cache = {"data": None, "timestamp": 0}
-_CACHE_TTL = 30  # seconds
+_CACHE_TTL = 120  # seconds (2 minutes - prices don't change more frequently)
 
 
 class CommodityService:
@@ -241,14 +241,10 @@ class CommodityService:
             return current_month >= commodity.peak_season_start or current_month <= commodity.peak_season_end
 
     def _normalize_price(self, price: float) -> float:
-        """Normalize prices to consistent quintal terms.
+        """Return prices in per quintal.
 
-        Historical data is stored in quintal (per 100 kg).  Prices that
-        look like per-kg values (< 200) are scaled up for display
-        consistency.
+        Data from data.gov.in is stored in per quintal (100 kg).
         """
-        if price < 200:
-            price = price * 100
         return round(price, 2)
 
     def get_details(self, commodity_id: UUID) -> dict | None:
@@ -467,94 +463,86 @@ class CommodityService:
         """
         Get current prices and changes for ALL commodities from PostgreSQL.
         Returns: dict {commodity_name_lower: {price, change_1d, change_7d, change_30d}}
-        
+
+        OPTIMIZED: Single query with date-range aggregation instead of 4N queries.
         Cached for 30 seconds to avoid expensive queries on every request.
         """
         global _price_cache
-        
+
         # Check cache
         current_time = time.time()
         if _price_cache["data"] is not None and (current_time - _price_cache["timestamp"]) < _CACHE_TTL:
             return _price_cache["data"]
-        
+
         from datetime import date, timedelta
-        
-        today = date.today()
-        date_1d = today - timedelta(days=1)
-        date_7d = today - timedelta(days=7)  
-        date_30d = today - timedelta(days=30)
-        
-        # Get all commodities
-        all_commodities = self.db.query(Commodity).filter(Commodity.is_active == True).all()
-        
+        from sqlalchemy import text
+
+        # Use the latest date with actual data instead of today
+        # (data may lag by a day or more)
+        latest_date_row = self.db.execute(
+            text("SELECT MAX(price_date) FROM price_history")
+        ).scalar()
+        latest = latest_date_row if latest_date_row else date.today()
+
+        date_1d = latest - timedelta(days=1)
+        date_1d_start = date_1d - timedelta(days=2)
+        date_7d = latest - timedelta(days=7)
+        date_7d_start = date_7d - timedelta(days=2)
+        date_30d = latest - timedelta(days=30)
+        date_30d_start = date_30d - timedelta(days=2)
+
+        # Single query: get avg prices for latest date and historical windows
+        query = text("""
+            SELECT
+                c.id,
+                c.name,
+                AVG(CASE WHEN ph.price_date = :latest THEN ph.modal_price END) AS price_today,
+                AVG(CASE WHEN ph.price_date >= :d1_start AND ph.price_date <= :d1_end THEN ph.modal_price END) AS price_1d,
+                AVG(CASE WHEN ph.price_date >= :d7_start AND ph.price_date <= :d7_end THEN ph.modal_price END) AS price_7d,
+                AVG(CASE WHEN ph.price_date >= :d30_start AND ph.price_date <= :d30_end THEN ph.modal_price END) AS price_30d
+            FROM commodities c
+            JOIN price_history ph ON ph.commodity_id = c.id
+            WHERE c.is_active = true
+              AND ph.price_date >= :d30_start
+            GROUP BY c.id, c.name
+            HAVING AVG(CASE WHEN ph.price_date = :latest THEN ph.modal_price END) IS NOT NULL
+               AND AVG(CASE WHEN ph.price_date = :latest THEN ph.modal_price END) > 0
+        """)
+
+        rows = self.db.execute(query, {
+            "latest": latest,
+            "d1_start": date_1d_start, "d1_end": date_1d,
+            "d7_start": date_7d_start, "d7_end": date_7d,
+            "d30_start": date_30d_start, "d30_end": date_30d,
+        }).fetchall()
+
         result = {}
-        for commodity in all_commodities:
-            # Get national average current price (not just one mandi)
-            current_price = self.db.query(func.avg(PriceHistory.modal_price)).filter(
-                PriceHistory.commodity_id == commodity.id,
-                PriceHistory.price_date == today
-            ).scalar()
-            
-            if not current_price or current_price <= 0:
-                continue
-                
-            current_price = float(current_price)
-            
+        for row in rows:
+            current_price = float(row.price_today)
+
             # Apply unit conversion (prices < 200 are in kg, convert to quintal)
             if current_price < 200:
                 current_price = current_price * 100
-            
-            # Calculate 1-day change
-            price_1d_ago = self.db.query(func.avg(PriceHistory.modal_price)).filter(
-                PriceHistory.commodity_id == commodity.id,
-                PriceHistory.price_date >= date_1d - timedelta(days=2),
-                PriceHistory.price_date <= date_1d
-            ).scalar()
-            change_1d = None
-            if price_1d_ago and price_1d_ago > 0:
-                price_1d_ago = float(price_1d_ago)
-                # Apply same conversion to historical price
-                if price_1d_ago < 200:
-                    price_1d_ago = price_1d_ago * 100
-                change_1d = round(((current_price - price_1d_ago) / price_1d_ago) * 100, 2)
-            
-            # Calculate 7-day change  
-            price_7d_ago = self.db.query(func.avg(PriceHistory.modal_price)).filter(
-                PriceHistory.commodity_id == commodity.id,
-                PriceHistory.price_date >= date_7d - timedelta(days=2),
-                PriceHistory.price_date <= date_7d
-            ).scalar()
-            change_7d = None
-            if price_7d_ago and price_7d_ago > 0:
-                price_7d_ago = float(price_7d_ago)
-                # Apply same conversion to historical price
-                if price_7d_ago < 200:
-                    price_7d_ago = price_7d_ago * 100
-                change_7d = round(((current_price - price_7d_ago) / price_7d_ago) * 100, 2)
-            
-            # Calculate 30-day change
-            price_30d_ago = self.db.query(func.avg(PriceHistory.modal_price)).filter(
-                PriceHistory.commodity_id == commodity.id,
-                PriceHistory.price_date >= date_30d - timedelta(days=2),
-                PriceHistory.price_date <= date_30d
-            ).scalar()
-            change_30d = None
-            if price_30d_ago and price_30d_ago > 0:
-                price_30d_ago = float(price_30d_ago)
-                # Apply same conversion to historical price
-                if price_30d_ago < 200:
-                    price_30d_ago = price_30d_ago * 100
-                change_30d = round(((current_price - price_30d_ago) / price_30d_ago) * 100, 2)
-            
-            result[commodity.name.lower()] = {
+
+            def _calc_change(hist_price_raw):
+                if hist_price_raw is None or hist_price_raw <= 0:
+                    return None
+                hist_price = float(hist_price_raw)
+                if hist_price < 200:
+                    hist_price = hist_price * 100
+                if hist_price > 0:
+                    return round(((current_price - hist_price) / hist_price) * 100, 2)
+                return None
+
+            result[row.name.lower()] = {
                 'price': current_price,
-                'change_1d': change_1d,
-                'change_7d': change_7d,
-                'change_30d': change_30d,
+                'change_1d': _calc_change(row.price_1d),
+                'change_7d': _calc_change(row.price_7d),
+                'change_30d': _calc_change(row.price_30d),
             }
-        
+
         # Update cache
         _price_cache["data"] = result
         _price_cache["timestamp"] = time.time()
-        
+
         return result

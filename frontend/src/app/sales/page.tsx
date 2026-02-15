@@ -30,17 +30,23 @@ export default function SalesPage() {
 
     const { data: sales, isLoading } = useQuery({
         queryKey: ['sales'],
-        queryFn: salesService.getSalesHistory
+        queryFn: salesService.getSalesHistory,
+        staleTime: 2 * 60 * 1000,
+        gcTime: 5 * 60 * 1000,
     });
 
     const { data: analytics } = useQuery({
         queryKey: ['sales-analytics'],
-        queryFn: salesService.getAnalytics
+        queryFn: salesService.getAnalytics,
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
     });
 
     const { data: commodities } = useQuery({
         queryKey: ['commodities'],
-        queryFn: () => commoditiesService.getAll({ limit: 100 })
+        queryFn: () => commoditiesService.getAll({ limit: 500 }),
+        staleTime: 10 * 60 * 1000,
+        gcTime: 15 * 60 * 1000,
     });
 
     const addMutation = useMutation({

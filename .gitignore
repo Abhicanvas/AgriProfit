@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv
+venv/
 nul
 
 # Environment files (keep templates, ignore actual configs)
@@ -22,10 +23,33 @@ logs/
 htmlcov/
 .pytest_cache/
 test.db
+test_migration.db
+*.db
+*_test.db
+
+# Temporary and diagnostic files
+gaps.json
+database_gaps_report.json
+DIAGNOSTIC_REPORT.txt
+REPAIR_LOG.txt
+VALIDATION_RESULTS.txt
+TEST_RESULTS.md
+test_api_results.txt
+test_results.txt
+
+# Parquet data files (large datasets)
+*.parquet
+
+# Uploads directory
+uploads/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.claude/
+
+# Node modules
+node_modules/
 

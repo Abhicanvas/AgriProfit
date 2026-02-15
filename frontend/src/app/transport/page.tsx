@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { commoditiesService } from "@/services/commodities"
+import { transportService } from "@/services/transport"
 
 const COMMODITIES = ["Wheat", "Rice", "Tomato", "Potato", "Onion", "Banana", "Coconut", "Pepper", "Cardamom", "Rubber"]
 
@@ -29,19 +30,10 @@ const INDIAN_STATES = [
     "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
-const STATE_TOLL_FACTORS: Record<string, number> = {
-    "Uttar Pradesh": 0.86, "Maharashtra": 0.75, "Gujarat": 0.70, "Rajasthan": 0.65,
-    "Madhya Pradesh": 0.60, "Karnataka": 0.55, "Andhra Pradesh": 0.55, "Telangana": 0.55,
-    "Tamil Nadu": 0.50, "Haryana": 0.70, "Punjab": 0.55, "Bihar": 0.45, "West Bengal": 0.45,
-    "Odisha": 0.40, "Jharkhand": 0.40, "Chhattisgarh": 0.35, "Kerala": 0.25, "Goa": 0.30,
-    "Uttarakhand": 0.35, "Himachal Pradesh": 0.25, "Assam": 0.30, "Arunachal Pradesh": 0.15,
-    "Manipur": 0.15, "Meghalaya": 0.15, "Mizoram": 0.10, "Nagaland": 0.15, "Tripura": 0.15,
-    "Sikkim": 0.10,
-}
 
 const STATE_DISTRICTS: Record<string, string[]> = {
     "Kerala": ["Thiruvananthapuram", "Kollam", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"],
-    "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli", "Erode", "Vellore", "Thoothukudi", "Thanjavur", "Dindigul", "Krishnagiri"],
+    "Tamil Nadu": ["Chennai", "Chengalpattu", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli", "Erode", "Vellore", "Thoothukudi", "Thanjavur", "Dindigul", "Krishnagiri", "Kancheepuram", "Tiruvannamalai", "Cuddalore", "Villupuram", "Nagapattinam", "Tiruppur", "Namakkal", "Karur", "Dharmapuri", "Nilgiris", "Kanyakumari"],
     "Karnataka": ["Bengaluru Urban", "Bengaluru Rural", "Mysuru", "Mangaluru", "Hubli-Dharwad", "Belagavi", "Tumakuru", "Davangere", "Ballari", "Shivamogga", "Kalaburagi", "Hassan"],
     "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool", "Kadapa", "Tirupati", "Anantapur", "Rajahmundry", "Kakinada", "Eluru", "Ongole"],
     "Telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Ramagundam", "Mahbubnagar", "Nalgonda", "Adilabad", "Suryapet", "Siddipet", "Medak"],
@@ -70,60 +62,35 @@ const STATE_DISTRICTS: Record<string, string[]> = {
     "Sikkim": ["Gangtok", "Namchi", "Gyalshing", "Mangan", "Rangpo", "Singtam", "Jorethang"],
 }
 
-const STATE_MANDIS: Record<string, { name: string; base_distance: number; price_factor: number }[]> = {
-    "Kerala": [
-        { name: "Ernakulam APMC", base_distance: 45, price_factor: 1.12 },
-        { name: "Thrissur Mandi", base_distance: 75, price_factor: 1.08 },
-        { name: "Kozhikode Market", base_distance: 150, price_factor: 1.15 },
-        { name: "Palakkad APMC", base_distance: 120, price_factor: 1.1 },
-        { name: "Thiruvananthapuram Mandi", base_distance: 200, price_factor: 1.18 },
-    ],
-    "Tamil Nadu": [
-        { name: "Chennai Koyambedu", base_distance: 100, price_factor: 1.2 },
-        { name: "Coimbatore APMC", base_distance: 500, price_factor: 1.15 },
-        { name: "Madurai Mandi", base_distance: 450, price_factor: 1.1 },
-        { name: "Salem Market", base_distance: 340, price_factor: 1.08 },
-        { name: "Trichy APMC", base_distance: 320, price_factor: 1.05 },
-    ],
-    "Karnataka": [
-        { name: "Bangalore APMC (Yeshwanthpur)", base_distance: 80, price_factor: 1.2 },
-        { name: "Mysuru Mandi", base_distance: 150, price_factor: 1.12 },
-        { name: "Hubli-Dharwad Market", base_distance: 400, price_factor: 1.05 },
-        { name: "Mangaluru APMC", base_distance: 350, price_factor: 1.1 },
-        { name: "Belgaum Mandi", base_distance: 500, price_factor: 1.02 },
-    ],
-    "Maharashtra": [
-        { name: "Mumbai APMC (Vashi)", base_distance: 150, price_factor: 1.22 },
-        { name: "Pune Mandi", base_distance: 100, price_factor: 1.18 },
-        { name: "Nagpur APMC", base_distance: 280, price_factor: 1.1 },
-        { name: "Nashik Market", base_distance: 180, price_factor: 1.12 },
-        { name: "Aurangabad Mandi", base_distance: 230, price_factor: 1.08 },
-    ],
-    "Gujarat": [
-        { name: "Ahmedabad APMC", base_distance: 80, price_factor: 1.18 },
-        { name: "Surat Mandi", base_distance: 260, price_factor: 1.15 },
-        { name: "Rajkot Market", base_distance: 200, price_factor: 1.1 },
-        { name: "Vadodara APMC", base_distance: 110, price_factor: 1.12 },
-        { name: "Jamnagar Mandi", base_distance: 280, price_factor: 1.05 },
-    ],
-}
 
 interface TransportResult {
     mandi_name: string
+    state: string
+    district: string
     distance_km: number
     price_per_kg: number
+    gross_revenue: number
     costs: {
         freight: number
         toll: number
         loading: number
         unloading: number
+        mandi_fee: number
+        commission: number
         additional: number
         total: number
     }
     net_profit: number
+    roi_percentage: number
     vehicle_type: string
     arrival_time: string
     trips: number
+}
+
+const VEHICLE_LABELS: Record<string, string> = {
+    "TEMPO": "Tempo",
+    "TRUCK_SMALL": "LCV",
+    "TRUCK_LARGE": "HCV",
 }
 
 export default function TransportPage() {
@@ -143,12 +110,21 @@ export default function TransportPage() {
 
     const [costSettings, setCostSettings] = useState({
         freightRates: {
-            tataAce: 15, miniTruck: 20, lcv: 28, truck: 25, tenWheeler: 32, multiAxle: 55
+            tataAce: 18,  // Updated for 2026 diesel prices
+            miniTruck: 22,
+            lcv: 28,
+            truck: 32,
+            tenWheeler: 42,
+            multiAxle: 60
         },
-        loadingPerQuintal: 3, loadingPerTrip: 100,
-        unloadingPerQuintal: 2.5, unloadingPerTrip: 80,
-        weighbridge: 80, parking: 40, misc: 50,
-        tollPerPlaza: { light: 100, medium: 200, heavy: 350 },
+        loadingPerQuintal: 3.5,  // Realistic hamali rates
+        loadingPerTrip: 120,
+        unloadingPerQuintal: 3.0,
+        unloadingPerTrip: 100,
+        weighbridge: 80,
+        parking: 50,
+        misc: 70,  // Documentation fees
+        tollPerPlaza: { light: 110, medium: 210, heavy: 360 },  // 2026 NHAI rates
         tollPlazaSpacing: 60,
     })
 
@@ -158,21 +134,31 @@ export default function TransportPage() {
         staleTime: 300000,
     })
 
+    // Fetch real states from API, fall back to hardcoded list
+    const { data: apiStates } = useQuery({
+        queryKey: ["transport-states"],
+        queryFn: () => transportService.getStates(),
+        staleTime: 300000,
+    })
+    const statesList = apiStates && apiStates.length > 0 ? apiStates : INDIAN_STATES
+
+    // Fetch real districts from API for selected state, fall back to hardcoded
+    const { data: apiDistricts } = useQuery({
+        queryKey: ["transport-districts", form.source_state],
+        queryFn: () => transportService.getDistricts(form.source_state),
+        staleTime: 300000,
+        enabled: !!form.source_state,
+    })
+
     const commodityNames = useMemo(() => allCommodities?.map((c: any) => c.name) || COMMODITIES, [allCommodities])
     const filteredCommodities = useMemo(() => {
         if (!commoditySearch) return commodityNames
         return commodityNames.filter((c: string) => c.toLowerCase().includes(commoditySearch.toLowerCase()))
     }, [commodityNames, commoditySearch])
 
-    const currentDistricts = STATE_DISTRICTS[form.source_state] || []
-
-    const getStateMandis = () => {
-        return STATE_MANDIS[form.source_state] || STATE_MANDIS["Kerala"] || [
-            { name: `${form.source_state} Central Mandi`, base_distance: 50, price_factor: 1.0 },
-            { name: `${form.source_state} District Market`, base_distance: 100, price_factor: 1.05 },
-            { name: `${form.source_state} APMC`, base_distance: 150, price_factor: 1.1 },
-        ]
-    }
+    const currentDistricts = apiDistricts && apiDistricts.length > 0
+        ? apiDistricts
+        : STATE_DISTRICTS[form.source_state] || []
 
     const handleCalculate = async () => {
         if (!form.commodity || !form.quantity || !form.source_district) {
@@ -182,66 +168,61 @@ export default function TransportPage() {
 
         setLoading(true)
         const qty = parseFloat(form.quantity) * (form.unit === "ton" ? 1000 : form.unit === "quintal" ? 100 : 1)
-        const basePrice = 45
-        const stateMandis = getStateMandis()
-        const districtIndex = currentDistricts.indexOf(form.source_district)
-        const distanceVariance = districtIndex >= 0 ? (districtIndex * 15) : 0
 
-        setTimeout(() => {
-            const results = stateMandis.map((mandi) => {
-                const distance = Math.max(20, mandi.base_distance + distanceVariance + Math.floor(Math.random() * 30 - 15))
-                const pricePerKg = basePrice * mandi.price_factor + (Math.random() * 5)
-                const tons = qty / 1000
-                const quintals = qty / 100
+        try {
+            const response = await transportService.compareCosts({
+                commodity: form.commodity,
+                quantity_kg: qty,
+                source_state: form.source_state,
+                source_district: form.source_district,
+            })
 
-                let vehicleType = "", vehicleCapacity = 0, freightRatePerKm = 0
-                let tollRateCategory: 'light' | 'medium' | 'heavy' = 'light'
-
-                if (tons <= 0.75) {
-                    vehicleType = "Tata Ace (750kg)"; vehicleCapacity = 0.75
-                    freightRatePerKm = costSettings.freightRates.tataAce; tollRateCategory = 'light'
-                } else if (tons <= 2) {
-                    vehicleType = "Mini Truck (2T)"; vehicleCapacity = 2
-                    freightRatePerKm = costSettings.freightRates.miniTruck; tollRateCategory = 'light'
-                } else if (tons <= 7) {
-                    vehicleType = "LCV (7T)"; vehicleCapacity = 7
-                    freightRatePerKm = costSettings.freightRates.lcv; tollRateCategory = 'medium'
-                } else if (tons <= 12) {
-                    vehicleType = "Truck (12T)"; vehicleCapacity = 12
-                    freightRatePerKm = costSettings.freightRates.truck; tollRateCategory = 'medium'
-                } else if (tons <= 20) {
-                    vehicleType = "10-Wheeler (20T)"; vehicleCapacity = 20
-                    freightRatePerKm = costSettings.freightRates.tenWheeler; tollRateCategory = 'heavy'
-                } else {
-                    vehicleType = "Multi-Axle (40T)"; vehicleCapacity = 40
-                    freightRatePerKm = costSettings.freightRates.multiAxle; tollRateCategory = 'heavy'
-                }
-
-                const tripsRequired = Math.ceil(tons / vehicleCapacity)
-                const baseFreightCost = Math.round(distance * freightRatePerKm * tripsRequired)
-                const stateTollFactor = STATE_TOLL_FACTORS[form.source_state] || 0.5
-                const estimatedPlazas = Math.floor((distance / costSettings.tollPlazaSpacing) * stateTollFactor)
-                const tollCost = Math.round(estimatedPlazas * costSettings.tollPerPlaza[tollRateCategory] * tripsRequired)
-                const loadingCost = Math.round(quintals * costSettings.loadingPerQuintal + costSettings.loadingPerTrip * tripsRequired)
-                const unloadingCost = Math.round(quintals * costSettings.unloadingPerQuintal + costSettings.unloadingPerTrip * tripsRequired)
-                const additionalCost = (costSettings.weighbridge * 2 + costSettings.parking + costSettings.misc) * tripsRequired
-                const totalCosts = baseFreightCost + tollCost + loadingCost + unloadingCost + additionalCost
-                const revenue = qty * pricePerKg
-                const netProfit = Math.round(revenue - totalCosts)
-                const minHours = Math.ceil(distance / 50), maxHours = Math.ceil(distance / 35)
-                const arrivalTime = minHours === maxHours ? `~${minHours} hr${minHours > 1 ? 's' : ''}` : `${minHours}-${maxHours} hrs`
+            // Map backend response to the UI format
+            const comparisons = response.comparisons || []
+            const mapped: TransportResult[] = comparisons.map((c: any) => {
+                const distance = c.distance_km || 0
+                const minHours = Math.ceil(distance / 50)
+                const maxHours = Math.ceil(distance / 35)
+                const arrivalTime = distance === 0 ? "N/A" :
+                    minHours === maxHours ? `~${minHours} hr${minHours > 1 ? 's' : ''}` : `${minHours}-${maxHours} hrs`
 
                 return {
-                    mandi_name: mandi.name, distance_km: distance, price_per_kg: pricePerKg,
-                    costs: { freight: baseFreightCost, toll: tollCost, loading: loadingCost, unloading: unloadingCost, additional: additionalCost, total: totalCosts },
-                    net_profit: netProfit, vehicle_type: vehicleType + (tripsRequired > 1 ? ` x${tripsRequired}` : ''),
-                    arrival_time: arrivalTime, trips: tripsRequired,
+                    mandi_name: c.mandi_name,
+                    state: c.state || "",
+                    district: c.district || "",
+                    distance_km: Math.round(distance),
+                    price_per_kg: c.price_per_kg || 0,
+                    gross_revenue: Math.round(c.gross_revenue || 0),
+                    costs: {
+                        freight: Math.round(c.costs?.transport_cost || 0),
+                        toll: Math.round(c.costs?.toll_cost || 0),
+                        loading: Math.round(c.costs?.loading_cost || 0),
+                        unloading: Math.round(c.costs?.unloading_cost || 0),
+                        mandi_fee: Math.round(c.costs?.mandi_fee || 0),
+                        commission: Math.round(c.costs?.commission || 0),
+                        additional: Math.round(c.costs?.additional_cost || 0),
+                        total: Math.round(c.costs?.total_cost || 0),
+                    },
+                    net_profit: Math.round(c.net_profit || 0),
+                    roi_percentage: c.roi_percentage || 0,
+                    vehicle_type: c.vehicle_type || "N/A",
+                    arrival_time: arrivalTime,
+                    trips: c.trips_required || 1,
                 }
             })
 
-            setResults(results.sort((a, b) => b.net_profit - a.net_profit))
+            if (mapped.length === 0) {
+                toast.warning("No mandis found with price data for this commodity and location")
+            }
+
+            setResults(mapped.sort((a, b) => b.net_profit - a.net_profit))
+        } catch (error: any) {
+            console.error("Transport comparison failed:", error)
+            toast.error(error?.response?.data?.detail || "Failed to calculate transport costs. Please try again.")
+            setResults(null)
+        } finally {
             setLoading(false)
-        }, 1000)
+        }
     }
 
     return (
@@ -338,7 +319,7 @@ export default function TransportPage() {
                                     <Select value={form.source_state} onValueChange={(v) => setForm({ ...form, source_state: v, source_district: "" })}>
                                         <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            {INDIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                            {statesList.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -367,13 +348,86 @@ export default function TransportPage() {
                     </Card>
 
                     {/* Results */}
-                    {results && (
+                    {results && results.length === 0 && (
+                        <Card className="border-orange-300 bg-orange-50/50">
+                            <CardContent className="py-8 text-center">
+                                <Truck className="h-12 w-12 mx-auto text-orange-400 mb-3" />
+                                <h3 className="text-lg font-semibold text-orange-700 mb-1">No Mandis Found</h3>
+                                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                                    No mandis with recent price data were found for <strong>{form.commodity}</strong> near <strong>{form.source_district}, {form.source_state}</strong>.
+                                    Try a different commodity, district, or check if price data is available.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {results && results.length > 0 && (
+                        <>
+                            {/* Best Option Analysis */}
+                            {results[0].net_profit > 0 && (
+                                <Card className="border-green-500 border-2 bg-green-50/50">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2 text-green-700">
+                                            <TrendingUp className="h-5 w-5" />
+                                            Why {results[0].mandi_name} is the Best Option
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="p-4 bg-white rounded-lg border">
+                                                    <p className="text-sm text-muted-foreground mb-1">Highest Net Profit</p>
+                                                    <p className="text-2xl font-bold text-green-600">₹{results[0].net_profit.toLocaleString()}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        ₹{(results[0].net_profit / parseFloat(form.quantity || "1")).toFixed(0)} per {form.unit}
+                                                    </p>
+                                                </div>
+                                                <div className="p-4 bg-white rounded-lg border">
+                                                    <p className="text-sm text-muted-foreground mb-1">Best ROI</p>
+                                                    <p className="text-2xl font-bold text-blue-600">{results[0].roi_percentage.toFixed(1)}%</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Return on investment</p>
+                                                </div>
+                                                <div className="p-4 bg-white rounded-lg border">
+                                                    <p className="text-sm text-muted-foreground mb-1">Optimal Distance</p>
+                                                    <p className="text-2xl font-bold text-orange-600">{results[0].distance_km} km</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Est. {results[0].arrival_time} travel time</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="p-4 bg-white rounded-lg border">
+                                                <h4 className="font-semibold mb-2 text-sm">Analysis</h4>
+                                                <ul className="space-y-2 text-sm text-muted-foreground">
+                                                    <li className="flex items-start gap-2">
+                                                        <span className="text-green-600 mt-0.5">✓</span>
+                                                        <span><strong>Highest market price:</strong> ₹{(results[0].price_per_kg * 100).toFixed(2)}/quintal - 
+                                                        {results[1] ? ` ₹${((results[0].price_per_kg - results[1].price_per_kg) * 100).toFixed(2)} more than 2nd best` : ' best price available'}</span>
+                                                    </li>
+                                                    <li className="flex items-start gap-2">
+                                                        <span className="text-green-600 mt-0.5">✓</span>
+                                                        <span><strong>Cost-effective distance:</strong> {results[0].distance_km} km balances transport costs (₹{results[0].costs.total.toLocaleString()}) with price advantage</span>
+                                                    </li>
+                                                    <li className="flex items-start gap-2">
+                                                        <span className="text-green-600 mt-0.5">✓</span>
+                                                        <span><strong>Optimal vehicle:</strong> {VEHICLE_LABELS[results[0].vehicle_type] || results[0].vehicle_type} ({results[0].trips} trip{results[0].trips > 1 ? 's' : ''}) minimizes freight costs</span>
+                                                    </li>
+                                                    <li className="flex items-start gap-2">
+                                                        <span className="text-green-600 mt-0.5">✓</span>
+                                                        <span><strong>Best profit margin:</strong> {results[0].gross_revenue > 0 ? ((results[0].net_profit / results[0].gross_revenue) * 100).toFixed(1) : "0.0"}% of gross revenue (₹{results[0].gross_revenue.toLocaleString()}) retained as profit</span>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center justify-between">
                                     <span>Transport Comparison Results</span>
                                     <Badge variant="outline">{form.commodity} - {form.quantity} {form.unit}</Badge>
                                 </CardTitle>
+                                <CardDescription>All mandis ranked by profitability (highest profit first)</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="overflow-x-auto">
@@ -382,25 +436,32 @@ export default function TransportPage() {
                                             <TableRow>
                                                 <TableHead>Mandi</TableHead>
                                                 <TableHead className="text-right">Distance</TableHead>
-                                                <TableHead className="text-right">Price/kg</TableHead>
+                                                <TableHead className="text-right">Price/quintal</TableHead>
                                                 <TableHead className="text-right">Transport Cost</TableHead>
                                                 <TableHead>Vehicle</TableHead>
                                                 <TableHead>Est. Time</TableHead>
+                                                <TableHead className="text-right">ROI</TableHead>
                                                 <TableHead className="text-right">Net Profit</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {results.map((r, i) => (
-                                                <TableRow key={i} className={i === 0 ? "bg-green-50" : ""}>
+                                                <TableRow key={i} className={i === 0 ? "bg-green-50 border-l-4 border-l-green-500" : ""}>
                                                     <TableCell className="font-medium">
-                                                        {r.mandi_name}
-                                                        {i === 0 && <Badge className="ml-2 bg-green-600">Best Option</Badge>}
+                                                        <div>{r.mandi_name}</div>
+                                                        {r.district && <div className="text-xs text-muted-foreground">{r.district}, {r.state}</div>}
+                                                        {i === 0 && <Badge className="mt-1 bg-green-600">Best Option</Badge>}
                                                     </TableCell>
                                                     <TableCell className="text-right">{r.distance_km} km</TableCell>
-                                                    <TableCell className="text-right">₹{r.price_per_kg.toFixed(2)}</TableCell>
+                                                    <TableCell className="text-right">₹{(r.price_per_kg * 100).toFixed(2)}</TableCell>
                                                     <TableCell className="text-right text-red-600">₹{r.costs.total.toLocaleString()}</TableCell>
-                                                    <TableCell><Badge variant="outline">{r.vehicle_type}</Badge></TableCell>
+                                                    <TableCell><Badge variant="outline">{VEHICLE_LABELS[r.vehicle_type] || r.vehicle_type}</Badge></TableCell>
                                                     <TableCell className="text-muted-foreground">{r.arrival_time}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Badge variant={r.roi_percentage > 500 ? "default" : r.roi_percentage > 300 ? "secondary" : "outline"}>
+                                                            {r.roi_percentage.toFixed(1)}%
+                                                        </Badge>
+                                                    </TableCell>
                                                     <TableCell className="text-right font-semibold text-green-600">₹{r.net_profit.toLocaleString()}</TableCell>
                                                 </TableRow>
                                             ))}
@@ -412,18 +473,52 @@ export default function TransportPage() {
                                 {results.length > 0 && (
                                     <div className="mt-6 p-4 bg-muted/50 rounded-lg">
                                         <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                            <TrendingUp className="h-4 w-4" /> Cost Breakdown (Best Option: {results[0].mandi_name})
+                                            <TrendingUp className="h-4 w-4" /> Detailed Cost Breakdown (Best Option: {results[0].mandi_name})
                                         </h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                            <div className="space-y-1"><p className="text-muted-foreground">Freight Cost</p><p className="font-medium">₹{results[0].costs.freight.toLocaleString()}</p></div>
-                                            <div className="space-y-1"><p className="text-muted-foreground">Toll Charges</p><p className="font-medium">₹{results[0].costs.toll.toLocaleString()}</p></div>
-                                            <div className="space-y-1"><p className="text-muted-foreground">Loading (Hamali)</p><p className="font-medium">₹{results[0].costs.loading.toLocaleString()}</p></div>
-                                            <div className="space-y-1"><p className="text-muted-foreground">Unloading</p><p className="font-medium">₹{results[0].costs.unloading.toLocaleString()}</p></div>
-                                            <div className="space-y-1"><p className="text-muted-foreground">Additional Charges</p><p className="font-medium">₹{results[0].costs.additional.toLocaleString()}</p><p className="text-xs text-muted-foreground">(Weighbridge, Parking, Docs)</p></div>
-                                            <div className="space-y-1 col-span-2 md:col-span-3 border-t pt-2 mt-2">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Freight Cost (Round-trip)</p>
+                                                <p className="font-medium">₹{results[0].costs.freight.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">{VEHICLE_LABELS[results[0].vehicle_type] || results[0].vehicle_type} × {results[0].trips} trip(s)</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Toll Charges</p>
+                                                <p className="font-medium">₹{results[0].costs.toll.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">Highway tolls (both ways)</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Loading (Hamali)</p>
+                                                <p className="font-medium">₹{results[0].costs.loading.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">@₹3.5/quintal</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Unloading</p>
+                                                <p className="font-medium">₹{results[0].costs.unloading.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">@₹3/quintal</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Mandi Fee (1.5%)</p>
+                                                <p className="font-medium">₹{results[0].costs.mandi_fee.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">Market fee</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Commission (2.5%)</p>
+                                                <p className="font-medium">₹{results[0].costs.commission.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">Agent commission</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Additional Charges</p>
+                                                <p className="font-medium">₹{results[0].costs.additional.toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">Weighbridge, Parking, Docs</p>
+                                            </div>
+                                            <div className="space-y-1 col-span-2 md:col-span-3 lg:col-span-4 border-t pt-2 mt-2">
                                                 <div className="flex justify-between items-center">
                                                     <p className="font-semibold">Total Transport Cost</p>
                                                     <p className="font-bold text-red-600 text-lg">₹{results[0].costs.total.toLocaleString()}</p>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
+                                                    <span>Includes mandi fee (1.5%) and commission (2.5%)</span>
+                                                    <span>ROI: {results[0].roi_percentage.toFixed(1)}%</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -431,6 +526,7 @@ export default function TransportPage() {
                                 )}
                             </CardContent>
                         </Card>
+                        </>
                     )}
 
                     {/* Customizable Cost Settings */}
@@ -441,7 +537,7 @@ export default function TransportPage() {
                                 <Badge variant="outline" className="font-normal">{showCostSettings ? "Hide" : "Show"} Settings</Badge>
                             </CardTitle>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Adjust freight rates, toll charges, and labor costs based on your local rates
+                                Adjust freight rates, toll charges, and labor costs based on your local rates. Default values reflect February 2026 Indian market rates.
                             </p>
                         </CardHeader>
 
@@ -589,12 +685,12 @@ export default function TransportPage() {
                                     {/* Reset Button */}
                                     <div className="flex justify-end pt-2 border-t">
                                         <Button variant="outline" size="sm" onClick={() => setCostSettings({
-                                            freightRates: { tataAce: 15, miniTruck: 20, lcv: 28, truck: 25, tenWheeler: 32, multiAxle: 55 },
-                                            loadingPerQuintal: 3, loadingPerTrip: 100, unloadingPerQuintal: 2.5, unloadingPerTrip: 80,
-                                            weighbridge: 80, parking: 40, misc: 50,
-                                            tollPerPlaza: { light: 100, medium: 200, heavy: 350 },
+                                            freightRates: { tataAce: 18, miniTruck: 22, lcv: 28, truck: 32, tenWheeler: 42, multiAxle: 60 },
+                                            loadingPerQuintal: 3.5, loadingPerTrip: 120, unloadingPerQuintal: 3.0, unloadingPerTrip: 100,
+                                            weighbridge: 80, parking: 50, misc: 70,
+                                            tollPerPlaza: { light: 110, medium: 210, heavy: 360 },
                                             tollPlazaSpacing: 60,
-                                        })}>Reset to Default Rates</Button>
+                                        })}>Reset to Default Rates (2026)</Button>
                                     </div>
                                 </div>
                             </CardContent>

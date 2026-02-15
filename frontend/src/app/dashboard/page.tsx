@@ -32,7 +32,8 @@ const ResponsiveContainer = dynamic(() => import("recharts").then(mod => mod.Res
 const Cell = dynamic(() => import("recharts").then(mod => mod.Cell), { ssr: false })
 
 import { analyticsService, DashboardData, MarketCoverage } from "@/services/analytics"
-import { commoditiesService, CommodityWithPrice } from "@/services/commodities"
+import { commoditiesService } from "@/services/commodities"
+import type { CommodityWithPrice } from "@/types"
 import { notificationsService, Activity as ActivityType } from "@/services/notifications"
 import { NotificationBell } from "@/components/layout/NotificationBell"
 import { MarketPricesSection } from "@/components/dashboard/MarketPricesSection"
@@ -85,16 +86,22 @@ export default function Dashboard() {
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => analyticsService.getDashboard(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
   const { data: commoditiesData = [] } = useQuery({
     queryKey: ['top-commodities'],
     queryFn: () => commoditiesService.getTopCommodities(5),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
   const { data: activitiesData = [] } = useQuery({
     queryKey: ['recent-activity'],
     queryFn: () => notificationsService.getRecentActivity(5),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   })
 
   // Transform commodities data
@@ -284,8 +291,8 @@ export default function Dashboard() {
             <MarketPricesSection />
           </div>
 
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
+          {/* Main Grid - Top Commodities & Mandis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6 lg:mb-8">
             {/* Top Commodities */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -341,6 +348,50 @@ export default function Dashboard() {
                     ))
                   ) : (
                     <p className="text-center text-muted-foreground py-4">No commodities found</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Mandis */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg font-semibold">Most Active Mandis</CardTitle>
+                <Link href="/mandis">
+                  <Button variant="ghost" size="sm" className="text-primary">
+                    View All
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="space-y-3">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : dashboardData?.top_mandis?.length ? (
+                    dashboardData.top_mandis.slice(0, 5).map((mandi, idx) => (
+                      <Link
+                        key={mandi.mandi_id}
+                        href={`/mandis/${mandi.mandi_id}`}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-primary/10 text-primary font-bold text-sm">
+                            #{idx + 1}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{mandi.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {mandi.record_count.toLocaleString()} records
+                            </p>
+                          </div>
+                        </div>
+                        <Store className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-center text-muted-foreground py-4">No mandis data</p>
                   )}
                 </div>
               </CardContent>

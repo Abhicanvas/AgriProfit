@@ -1,7 +1,7 @@
 import uuid as uuid_module
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import String, TIMESTAMP, Text, Integer, Boolean, text
+from sqlalchemy import String, TIMESTAMP, Text, Integer, Boolean, Index, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
@@ -105,6 +105,11 @@ class Commodity(Base):
         "PriceForecast",
         back_populates="commodity",
         cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_commodities_active_name", "is_active", "name"),
+        Index("idx_commodities_active_category", "is_active", "category"),
     )
 
     def __repr__(self) -> str:

@@ -22,6 +22,7 @@ class CommunityPostService:
                 user_id=user_id,
                 post_type=post_data.post_type,
                 district=post_data.district,
+                image_url=getattr(post_data, "image_url", None),
             )
             self.db.add(post)
             self.db.commit()
@@ -59,7 +60,10 @@ class CommunityPostService:
         if district:
             query = query.filter(CommunityPost.district == district)
 
-        return query.order_by(CommunityPost.created_at.desc()).offset(skip).limit(limit).all()
+        return query.order_by(
+            CommunityPost.is_pinned.desc(),
+            CommunityPost.created_at.desc(),
+        ).offset(skip).limit(limit).all()
 
     def get_by_user(self, user_id: UUID, limit: int = 100) -> list[CommunityPost]:
         """Get all posts by a specific user."""
@@ -306,3 +310,32 @@ class CommunityPostService:
             CommunityLike.post_id == post_id,
             CommunityLike.user_id == user_id
         ).first() is not None
+
+    def increment_view_count(self, post_id: UUID) -> None:
+        """Increment view count for a post (fire-and-forget)."""
+        try:
+            self.db.query(CommunityPost).filter(
+                CommunityPost.id == post_id
+            ).update({"view_count": CommunityPost.view_count + 1})
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+
+    def set_pinned(self, post_id: UUID, is_pinned: bool) -> CommunityPost | None:
+        """Pin or unpin a post (admin only)."""
+        post = self.db.query(CommunityPost).filter(
+            CommunityPost.id == post_id,
+            CommunityPost.deleted_at.is_(None),
+        ).first()
+
+        if not post:
+            return None
+
+        try:
+            post.is_pinned = is_pinned
+            self.db.commit()
+            self.db.refresh(post)
+            return post
+        except Exception:
+            self.db.rollback()
+            raise

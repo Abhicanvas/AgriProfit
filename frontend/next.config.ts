@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Optimize barrel exports for large icon/component libraries
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
   async headers() {
     return [
       {

@@ -12,6 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Integer,
     String,
     Text,
     Boolean,
@@ -68,6 +69,23 @@ class CommunityPost(Base):
         default=False,
     )
 
+    image_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    view_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+
+    is_pinned: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("FALSE"),
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
         nullable=False,
@@ -112,7 +130,7 @@ class CommunityPost(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "post_type IN ('discussion', 'question', 'tip', 'announcement')",
+            "post_type IN ('discussion', 'question', 'tip', 'announcement', 'alert')",
             name="community_posts_post_type_check",
         ),
         Index(

@@ -66,7 +66,7 @@ export default function MandisPage() {
     const [maxDistanceKm, setMaxDistanceKm] = useState<number | undefined>(undefined)
     const [sortBy, setSortBy] = useState<'name' | 'distance' | 'rating'>('name')
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-    const [currentLimit, setCurrentLimit] = useState(100)
+    const [currentLimit, setCurrentLimit] = useState(50)
 
     // Fetch mandis with filters
     const fetchMandis = useCallback(async () => {
@@ -139,7 +139,7 @@ export default function MandisPage() {
 
     // Fetch mandis when filters change
     useEffect(() => {
-        setCurrentLimit(100) // Reset to initial limit when filters change
+        setCurrentLimit(50) // Reset to initial limit when filters change
         const debounce = setTimeout(() => {
             fetchMandis()
         }, 300)
@@ -160,7 +160,7 @@ export default function MandisPage() {
         setMaxDistanceKm(undefined)
         setSortBy('name')
         setSortOrder('asc')
-        setCurrentLimit(100)
+        setCurrentLimit(50)
     }
 
     // Load more mandis
@@ -195,7 +195,7 @@ export default function MandisPage() {
                                     Mandis
                                 </h1>
                                 <p className="text-muted-foreground mt-1">
-                                    Agricultural markets across Kerala
+                                    Agricultural markets across India
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">

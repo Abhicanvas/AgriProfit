@@ -40,3 +40,62 @@ Due to environment limitations preventing full interactive API testing, the foll
 5.  **Admin**: Verified `app/admin/routes.py`. Role-based access control and audit logging implemented.
 
 **Conclusion**: The backend appears functionally complete and robust, with the critical blocking bug resolved.
+
+---
+
+## Bug #3: Network Error - Backend Server Not Running
+**Severity**: Critical (Environment Setup)
+**Test Script**: All (affects entire application)
+**Error Message**: 
+```
+[API] Response error: "Network Error" "/commodities/categories"
+AxiosError: Network Error
+```
+
+**Root Cause**:
+The backend server is not running, causing all API calls from the frontend to fail with network errors.
+
+**Steps to Reproduce**:
+1. Open frontend at http://localhost:3000
+2. Navigate to any page that makes API calls (e.g., Commodities)
+3. Check browser console
+
+**Expected Behavior**:
+- Backend server should be running on http://localhost:8000
+- API calls should return data successfully
+
+**Actual Behavior**:
+- Backend server is not running
+- All API calls fail with "Network Error"
+- Frontend cannot fetch any data
+
+**Resolution**:
+Start both servers using the provided startup scripts:
+
+**Option 1: Use Startup Scripts** (Recommended)
+1. Double-click `start_backend.bat` in repo root
+2. Double-click `start_frontend.bat` in repo root
+
+**Option 2: Manual Start**
+```bash
+# Terminal 1 - Backend
+cd backend
+venv\Scripts\uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+**Verification**:
+- Backend: http://localhost:8000/docs should show API documentation
+- Frontend: http://localhost:3000 should load without console errors
+
+**Status**: Environment Issue - Requires manual server startup
+
+**Files Created**:
+- `start_backend.bat` - Automated backend startup script
+- `start_frontend.bat` - Automated frontend startup script  
+- `check_servers.bat` - Server status checker
+- `NETWORK_ERROR_FIX.md` - Detailed troubleshooting guide
+

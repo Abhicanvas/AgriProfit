@@ -19,6 +19,10 @@ import {
     User,
     Filter,
     SortAsc,
+    Bell,
+    AlertTriangle,
+    Eye,
+    Pin,
 } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -58,6 +62,7 @@ import {
     formatFileSize,
     UploadError,
 } from "@/lib/upload"
+import { notificationsService } from "@/services/notifications"
 
 // Sort options
 type SortOption = 'recent' | 'upvotes' | 'replies';
@@ -128,6 +133,11 @@ export default function CommunityPage() {
     const [deleteConfirmPost, setDeleteConfirmPost] = useState<CommunityPost | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
 
+    // Notification bell state
+    const [unreadCount, setUnreadCount] = useState(0)
+    const [showNotifPanel, setShowNotifPanel] = useState(false)
+    const [communityNotifs, setCommunityNotifs] = useState<{ id: string; title: string; message: string; created_at: string; post_id?: string }[]>([])
+
     // Toast/notification state
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
@@ -171,9 +181,18 @@ export default function CommunityPage() {
         }
     }, [activeTab, searchQuery, sortBy])
 
-    // Sort posts helper
+    // Sort posts helper - pinned posts always first, then alerts affecting user
     const sortPosts = (postsToSort: CommunityPost[], sort: SortOption): CommunityPost[] => {
         return [...postsToSort].sort((a, b) => {
+            // Pinned posts always come first
+            if (a.is_pinned && !b.is_pinned) return -1
+            if (!a.is_pinned && b.is_pinned) return 1
+
+            // Alert posts affecting user's area come next
+            const aHighlight = a.post_type === 'alert' && a.alert_highlight ? 1 : 0
+            const bHighlight = b.post_type === 'alert' && b.alert_highlight ? 1 : 0
+            if (aHighlight !== bHighlight) return bHighlight - aHighlight
+
             switch (sort) {
                 case 'upvotes':
                     return b.likes_count - a.likes_count
@@ -190,6 +209,41 @@ export default function CommunityPage() {
     useEffect(() => {
         fetchPosts()
     }, [fetchPosts])
+
+    // Fetch notification count
+    useEffect(() => {
+        if (!isLoggedIn()) return
+        const loadNotifs = async () => {
+            try {
+                const count = await notificationsService.getUnreadCount()
+                setUnreadCount(count)
+            } catch {
+                // Silently fail
+            }
+        }
+        loadNotifs()
+    }, [])
+
+    // Load community notifications for panel
+    const loadCommunityNotifs = async () => {
+        try {
+            const data = await notificationsService.getNotifications({
+                limit: 20,
+                type: 'community',
+            })
+            setCommunityNotifs(
+                data.notifications.map(n => ({
+                    id: n.id,
+                    title: n.title,
+                    message: n.message,
+                    created_at: n.created_at,
+                    post_id: n.link?.includes('post=') ? n.link.split('post=')[1] : undefined,
+                }))
+            )
+        } catch {
+            // Silently fail
+        }
+    }
 
     // Handle image selection
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -258,8 +312,7 @@ export default function CommunityPage() {
                 title: createTitle.trim(),
                 content: createContent.trim(),
                 post_type: createCategory,
-                // TODO: Pass image_url when backend supports it
-                // image_url: imageUrl,
+                image_url: imageUrl,
             })
             setPosts(prev => [newPost, ...prev])
             setShowCreateForm(false)
@@ -268,7 +321,11 @@ export default function CommunityPage() {
             setCreateCategory('discussion')
             setFormErrors({})
             clearImage()
-            showToast('Post created successfully!')
+            if (createCategory === 'alert') {
+                showToast('Alert posted! Notifications sent to users in your district and neighboring areas.')
+            } else {
+                showToast('Post created successfully!')
+            }
         } catch (err) {
             console.error('Failed to create post:', err)
             showToast('Failed to create post. Please try again.', 'error')
@@ -486,15 +543,91 @@ export default function CommunityPage() {
                                 Share knowledge, ask questions, and connect with fellow farmers
                             </p>
                         </div>
-                        <Button
-                            onClick={() => setShowCreateForm(true)}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                        >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Post
-                        </Button>
+                        <div className="flex items-center gap-3">
+                            {/* Notification Bell */}
+                            {isLoggedIn() && (
+                                <button
+                                    onClick={() => {
+                                        setShowNotifPanel(!showNotifPanel)
+                                        if (!showNotifPanel) loadCommunityNotifs()
+                                    }}
+                                    className="relative p-2 rounded-full hover:bg-muted transition-colors"
+                                >
+                                    <Bell className="h-5 w-5 text-muted-foreground" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+                                            {unreadCount > 9 ? '9+' : unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+                            <Button
+                                onClick={() => setShowCreateForm(true)}
+                                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Post
+                            </Button>
+                        </div>
                     </div>
                 </div>
+
+                {/* Notification Panel */}
+                {showNotifPanel && (
+                    <Card className="mb-6 max-h-80 overflow-y-auto">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base">Community Notifications</CardTitle>
+                                <button
+                                    onClick={() => setShowNotifPanel(false)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {communityNotifs.length > 0 ? (
+                                <div className="space-y-2">
+                                    {communityNotifs.map(notif => (
+                                        <div
+                                            key={notif.id}
+                                            className="p-2.5 border border-border rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                                            onClick={async () => {
+                                                await notificationsService.markAsRead(notif.id)
+                                                setUnreadCount(prev => Math.max(0, prev - 1))
+                                                if (notif.post_id) {
+                                                    const post = posts.find(p => p.id === notif.post_id)
+                                                    if (post) openPostDetail(post)
+                                                }
+                                                setShowNotifPanel(false)
+                                            }}
+                                        >
+                                            <p className="text-sm font-medium">{notif.title}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.message}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatRelativeTime(notif.created_at)}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">No community notifications</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Alert Banner - shown when there are active alerts in user's area */}
+                {posts.some(p => p.post_type === 'alert' && p.alert_highlight) && (
+                    <div className="mb-6 bg-red-50 dark:bg-red-950 border-2 border-red-500 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-red-800 dark:text-red-300 font-semibold">
+                            <AlertTriangle className="h-5 w-5" />
+                            <span>Active alerts in your area!</span>
+                        </div>
+                        <p className="text-red-700 dark:text-red-400 text-sm mt-1">
+                            Posts highlighted in red below are alerts affecting your district and neighboring areas.
+                        </p>
+                    </div>
+                )}
 
                 {/* Filter/Tab Section */}
                 <div className="mb-6 space-y-4">
@@ -621,6 +754,19 @@ export default function CommunityPage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+
+                                {createCategory === 'alert' && (
+                                    <div className="mt-2 p-3 bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 rounded-lg">
+                                        <div className="flex items-center gap-2 text-red-800 dark:text-red-300 font-semibold text-sm">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            Alert posts will notify farmers in your area!
+                                        </div>
+                                        <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                                            Users in your district and neighboring districts will receive a notification.
+                                            Use this only for urgent information like pest outbreaks, weather warnings, or market disruptions.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Image Upload */}
@@ -681,11 +827,17 @@ export default function CommunityPage() {
                                 <Button
                                     onClick={handleCreatePost}
                                     disabled={isCreating || createTitle.length < 3 || createContent.length < 10}
+                                    className={createCategory === 'alert' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
                                 >
                                     {isCreating ? (
                                         <>
                                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                             Posting...
+                                        </>
+                                    ) : createCategory === 'alert' ? (
+                                        <>
+                                            <AlertTriangle className="h-4 w-4 mr-2" />
+                                            Post Alert
                                         </>
                                     ) : (
                                         'Post'
@@ -746,13 +898,24 @@ export default function CommunityPage() {
                         {posts.map(post => (
                             <Card
                                 key={post.id}
-                                className="cursor-pointer hover:shadow-md transition-shadow"
+                                className={`cursor-pointer hover:shadow-md transition-shadow ${
+                                    post.is_pinned
+                                        ? 'border-yellow-400 dark:border-yellow-600'
+                                        : post.post_type === 'alert' && post.alert_highlight
+                                        ? 'border-red-500 dark:border-red-600 shadow-md shadow-red-100 dark:shadow-red-900/20'
+                                        : post.post_type === 'alert'
+                                        ? 'border-red-300 dark:border-red-800'
+                                        : ''
+                                }`}
                                 onClick={() => openPostDetail(post)}
                             >
                                 <CardContent className="p-5">
                                     {/* Post Header */}
                                     <div className="flex items-start justify-between mb-3">
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                                            {post.is_pinned && (
+                                                <Pin className="h-4 w-4 text-yellow-600" />
+                                            )}
                                             <User className="h-4 w-4" />
                                             <span>{post.author_name || 'Anonymous'}</span>
                                             {post.district && (
@@ -764,13 +927,23 @@ export default function CommunityPage() {
                                             <Clock className="h-3 w-3 ml-2" />
                                             <span>{formatRelativeTime(post.created_at)}</span>
                                         </div>
-                                        <Badge className={POST_TYPE_COLORS[post.post_type]}>
-                                            {POST_TYPE_LABELS[post.post_type]}
-                                        </Badge>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            {post.post_type === 'alert' && post.alert_highlight && (
+                                                <Badge className="bg-red-600 text-white animate-pulse text-xs">
+                                                    AFFECTS YOUR AREA
+                                                </Badge>
+                                            )}
+                                            <Badge className={POST_TYPE_COLORS[post.post_type] || POST_TYPE_COLORS.discussion}>
+                                                {POST_TYPE_LABELS[post.post_type] || post.post_type}
+                                            </Badge>
+                                        </div>
                                     </div>
 
                                     {/* Title */}
                                     <h3 className="text-xl font-semibold text-foreground mb-2">
+                                        {post.post_type === 'alert' && (
+                                            <AlertTriangle className="inline h-5 w-5 text-red-500 mr-1.5 -mt-0.5" />
+                                        )}
                                         {post.title}
                                     </h3>
 
@@ -813,6 +986,12 @@ export default function CommunityPage() {
                                                 <MessageSquare className="h-5 w-5" />
                                                 <span>{post.replies_count}</span>
                                             </div>
+
+                                            {/* Views */}
+                                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                                <Eye className="h-4 w-4" />
+                                                <span>{post.view_count || 0}</span>
+                                            </div>
                                         </div>
 
                                         {/* Author Actions */}
@@ -850,11 +1029,27 @@ export default function CommunityPage() {
                         <>
                             <DialogHeader>
                                 <div className="flex items-start justify-between">
-                                    <Badge className={POST_TYPE_COLORS[selectedPost.post_type]}>
-                                        {POST_TYPE_LABELS[selectedPost.post_type]}
-                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                        {selectedPost.is_pinned && (
+                                            <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                                                <Pin className="h-3 w-3 mr-1" />
+                                                Pinned
+                                            </Badge>
+                                        )}
+                                        <Badge className={POST_TYPE_COLORS[selectedPost.post_type] || POST_TYPE_COLORS.discussion}>
+                                            {POST_TYPE_LABELS[selectedPost.post_type] || selectedPost.post_type}
+                                        </Badge>
+                                        {selectedPost.post_type === 'alert' && selectedPost.alert_highlight && (
+                                            <Badge className="bg-red-600 text-white animate-pulse">
+                                                AFFECTS YOUR AREA
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
                                 <DialogTitle className="text-xl mt-2">
+                                    {selectedPost.post_type === 'alert' && (
+                                        <AlertTriangle className="inline h-5 w-5 text-red-500 mr-1.5 -mt-0.5" />
+                                    )}
                                     {selectedPost.title}
                                 </DialogTitle>
                                 <DialogDescription className="flex items-center gap-2 text-sm">
@@ -906,6 +1101,10 @@ export default function CommunityPage() {
                                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                         <MessageSquare className="h-5 w-5" />
                                         <span>{selectedPost.replies_count} replies</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                        <Eye className="h-4 w-4" />
+                                        <span>{selectedPost.view_count || 0} views</span>
                                     </div>
                                 </div>
 

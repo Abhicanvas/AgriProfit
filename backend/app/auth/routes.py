@@ -390,6 +390,18 @@ async def verify_otp(
 
     # Get or create user
     user, is_new = service.get_or_create_user(verify_data.phone_number)
+    
+    # Check if user is banned (CRITICAL SECURITY CHECK)
+    if user.is_banned:
+        log_auth_failure(
+            phone_number=verify_data.phone_number,
+            ip_address=client_ip or "unknown",
+            reason="Account banned",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been banned. Please contact support for assistance.",
+        )
 
     # Generate tokens
     tokens = service.generate_tokens(user)

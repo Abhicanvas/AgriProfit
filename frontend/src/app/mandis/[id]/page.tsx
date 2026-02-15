@@ -56,6 +56,8 @@ export default function MandiDetailPage() {
         queryKey: ['mandi-detail', mandiId, userDistrict, userState],
         queryFn: () => mandisService.getDetails(mandiId, userDistrict, userState),
         enabled: !!mandiId,
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
     })
 
     if (isLoading) {

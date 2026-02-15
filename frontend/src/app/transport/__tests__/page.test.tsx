@@ -12,6 +12,14 @@ vi.mock("@/services/commodities", () => ({
     },
 }));
 
+vi.mock("@/services/transport", () => ({
+    transportService: {
+        getStates: vi.fn(),
+        getDistricts: vi.fn(),
+        compareCosts: vi.fn(),
+    },
+}));
+
 // Mock sonner toast
 vi.mock("sonner", () => ({
     toast: {
@@ -38,10 +46,12 @@ const mockCommodities = [
 describe("TransportPage - Form Validation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseQuery.mockReturnValue({
-            data: mockCommodities,
-            isLoading: false,
-            error: null,
+        mockUseQuery.mockImplementation((options: any) => {
+            const key = options?.queryKey?.[0];
+            if (key === "transport-commodities") {
+                return { data: mockCommodities, isLoading: false, error: null };
+            }
+            return { data: undefined, isLoading: false, error: null };
         });
     });
 
@@ -151,10 +161,12 @@ describe("TransportPage - Form Validation", () => {
 describe("TransportPage - Commodity Search", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseQuery.mockReturnValue({
-            data: mockCommodities,
-            isLoading: false,
-            error: null,
+        mockUseQuery.mockImplementation((options: any) => {
+            const key = options?.queryKey?.[0];
+            if (key === "transport-commodities") {
+                return { data: mockCommodities, isLoading: false, error: null };
+            }
+            return { data: undefined, isLoading: false, error: null };
         });
     });
 
@@ -218,14 +230,16 @@ describe("TransportPage - Commodity Search", () => {
     });
 
     it("uses fallback commodities if API fails", () => {
-        mockUseQuery.mockReturnValue({
-            data: undefined,
-            isLoading: false,
-            error: new Error("API failed"),
+        mockUseQuery.mockImplementation((options: any) => {
+            const key = options?.queryKey?.[0];
+            if (key === "transport-commodities") {
+                return { data: undefined, isLoading: false, error: new Error("API failed") };
+            }
+            return { data: undefined, isLoading: false, error: null };
         });
-        
+
         render(<TransportPage />);
-        
+
         // Should still render with fallback COMMODITIES list
         expect(screen.getByPlaceholderText("Search commodity...")).toBeInTheDocument();
     });
@@ -234,10 +248,12 @@ describe("TransportPage - Commodity Search", () => {
 describe("TransportPage - UI Elements", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockUseQuery.mockReturnValue({
-            data: mockCommodities,
-            isLoading: false,
-            error: null,
+        mockUseQuery.mockImplementation((options: any) => {
+            const key = options?.queryKey?.[0];
+            if (key === "transport-commodities") {
+                return { data: mockCommodities, isLoading: false, error: null };
+            }
+            return { data: undefined, isLoading: false, error: null };
         });
     });
 

@@ -5,6 +5,7 @@ Fetches real-time mandi prices from the Ministry of Agriculture's open data port
 API Endpoint: https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070
 """
 import os
+import time
 import logging
 from datetime import datetime
 from typing import Optional
@@ -39,7 +40,7 @@ class DataGovClient:
             raise ValueError("DATA_GOV_API_KEY not provided or set in environment")
         
         # Increased timeout for large/slow responses
-        self.client = httpx.Client(timeout=60.0)
+        self.client = httpx.Client(timeout=120.0)
     
     def _build_url(self, **params) -> str:
         """Build API URL with parameters."""
@@ -120,7 +121,7 @@ class DataGovClient:
         Fetch ALL price records using pagination.
         
         Args:
-            batch_size: Records per request (max 1000)
+            batch_size: Records per request (default 1000, max 1000)
             
         Returns:
             List of all price records
@@ -138,6 +139,10 @@ class DataGovClient:
         # Paginate through remaining records
         while len(all_records) < total:
             offset += batch_size
+            
+            # Add delay to prevent rate limiting
+            time.sleep(1.0)
+            
             data = self.fetch_prices(limit=batch_size, offset=offset)
             records = data.get("records", [])
             if not records:

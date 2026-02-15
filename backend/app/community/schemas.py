@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # Post types
-VALID_POST_TYPES = ["discussion", "question", "tip", "announcement"]
+VALID_POST_TYPES = ["discussion", "question", "tip", "announcement", "alert"]
 
 
 def _validate_title(v: str) -> str:
@@ -86,6 +86,7 @@ class CommunityPostCreate(BaseModel):
     content: str = Field(..., min_length=10, max_length=10000, description="Post content")
     post_type: str = Field(default="discussion", description="Type of post")
     district: str | None = Field(default=None, max_length=100, description="Related district")
+    image_url: str | None = Field(default=None, max_length=500, description="Optional image URL")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -179,18 +180,24 @@ class CommunityPostResponse(BaseModel):
     post_type: str = Field(..., description="Type of post")
     district: str | None = Field(None, description="Related district code")
     is_admin_override: bool = Field(..., description="Admin override flag")
+    image_url: str | None = Field(None, description="Optional image URL")
+    view_count: int = Field(default=0, description="Number of views")
+    is_pinned: bool = Field(default=False, description="Whether post is pinned")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
     # Interaction stats
     likes_count: int = Field(default=0, description="Number of upvotes")
     replies_count: int = Field(default=0, description="Number of replies")
-    
+
     # User context (populated manually in service/route if needed)
     user_has_liked: bool = Field(default=False, description="If current user liked this post")
-    
+
     # Author name
     author_name: str | None = Field(None, description="Author's name")
+
+    # Alert context (populated for alert posts)
+    alert_highlight: bool = Field(default=False, description="Whether to highlight this alert for the current user")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -252,3 +259,11 @@ class CommunityPostWithAuthor(CommunityPostResponse):
 
     author_name: str | None = None
     author_phone: str | None = None
+
+
+class AlertStatusResponse(BaseModel):
+    """Response for checking alert status of a post for a user."""
+    is_alert: bool = Field(..., description="Whether post is an alert type")
+    should_highlight: bool = Field(..., description="Whether to highlight for this user")
+    in_affected_area: bool = Field(..., description="Whether user is in the affected area")
+    author_district: str | None = Field(None, description="District where alert was posted")

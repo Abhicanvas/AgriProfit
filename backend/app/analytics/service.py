@@ -199,43 +199,44 @@ class AnalyticsService:
 
     def get_market_summary(self) -> MarketSummaryResponse:
         """Get overall market summary statistics."""
-        total_commodities = self.db.query(func.count(Commodity.id)).scalar() or 0
-        total_mandis = self.db.query(func.count(Mandi.id)).scalar() or 0
-        total_price_records = self.db.query(func.count(PriceHistory.id)).scalar() or 0
-        # Only count future forecasts (today and onwards)
-        today = date.today()
-        total_forecasts = self.db.query(func.count(PriceForecast.id)).filter(
-            PriceForecast.forecast_date >= today
-        ).scalar() or 0
+        from sqlalchemy import text
 
-        # Count non-deleted posts
-        total_posts = self.db.query(func.count(CommunityPost.id)).filter(
-            CommunityPost.deleted_at.is_(None)
-        ).scalar() or 0
-
-        total_users = self.db.query(func.count(User.id)).scalar() or 0
-
-        # Get last update timestamp
-        last_price = self.db.query(PriceHistory.created_at).order_by(
-            PriceHistory.created_at.desc()
-        ).first()
-
-        last_updated = last_price[0] if last_price else datetime.now(timezone.utc)
+        # Use pg_class reltuples for approximate count of large tables
+        # (price_history has 25M+ rows, COUNT(*) takes seconds)
+        # Small tables use exact COUNT since it's fast
+        query = text("""
+            SELECT
+                (SELECT COUNT(*) FROM commodities) as total_commodities,
+                (SELECT COUNT(*) FROM mandis) as total_mandis,
+                (SELECT GREATEST(reltuples::bigint, 0) FROM pg_class
+                 WHERE relname = 'price_history') as total_price_records,
+                (SELECT COUNT(*) FROM price_forecasts
+                 WHERE forecast_date >= CURRENT_DATE) as total_forecasts,
+                (SELECT COUNT(*) FROM community_posts
+                 WHERE deleted_at IS NULL) as total_posts,
+                (SELECT COUNT(*) FROM users) as total_users,
+                (SELECT MAX(price_date) FROM price_history) as last_updated
+        """)
         
-        # Handle timezone-naive timestamps from database
-        # Database stores local time without timezone info
-        if last_updated.tzinfo is None:
-            # Treat as local time and convert to UTC-aware
-            from datetime import timedelta
-            import time
-            
-            # Get local timezone offset in hours
-            local_offset = time.timezone if not time.daylight else time.altzone
-            local_offset_hours = -local_offset / 3600
-            
-            # Mark as UTC and adjust by the local offset
-            last_updated = last_updated.replace(tzinfo=timezone.utc)
-            last_updated = last_updated - timedelta(hours=local_offset_hours)
+        result = self.db.execute(query).fetchone()
+        
+        # Extract values from result
+        total_commodities = result[0] or 0
+        total_mandis = result[1] or 0
+        total_price_records = result[2] or 0
+        total_forecasts = result[3] or 0
+        total_posts = result[4] or 0
+        total_users = result[5] or 0
+        last_updated_raw = result[6]
+        if last_updated_raw is None:
+            last_updated = datetime.now(timezone.utc)
+        elif isinstance(last_updated_raw, date) and not isinstance(last_updated_raw, datetime):
+            # Convert date to datetime at midnight UTC
+            last_updated = datetime.combine(last_updated_raw, datetime.min.time(), tzinfo=timezone.utc)
+        elif last_updated_raw.tzinfo is None:
+            last_updated = last_updated_raw.replace(tzinfo=timezone.utc)
+        else:
+            last_updated = last_updated_raw
         
         # Calculate data freshness
         now = datetime.now(timezone.utc)
@@ -254,97 +255,94 @@ class AnalyticsService:
             hours_since_update=round(hours_since_update, 1),
         )
 
+
     def get_top_commodities_by_price_change(
         self,
         limit: int = 10,
         days: int = 30,
     ) -> list[TopCommodityItem]:
-        """Get commodities with highest price change percentage (Optimized)."""
+        """Get commodities with highest price change percentage.
+
+        Uses aggregate MIN/MAX on price_date per commodity to find first/last
+        prices, then joins back to get actual prices. Avoids expensive window
+        functions over millions of rows.
+        """
+        from sqlalchemy import text
+
         start_date = date.today() - timedelta(days=days)
-        
-        # 1. Get commodities that actually have data in the period
-        # We need first and last price for each commodity
-        
-        # Subquery for first date per commodity
-        first_dates = self.db.query(
-            PriceHistory.commodity_id,
-            func.min(PriceHistory.price_date).label("min_date")
-        ).filter(
-            PriceHistory.price_date >= start_date
-        ).group_by(PriceHistory.commodity_id).subquery()
-        
-        # Subquery for last date per commodity
-        last_dates = self.db.query(
-            PriceHistory.commodity_id,
-            func.max(PriceHistory.price_date).label("max_date")
-        ).filter(
-            PriceHistory.price_date >= start_date
-        ).group_by(PriceHistory.commodity_id).subquery()
-        
-        # Get prices at those dates
-        # This is a bit complex in pure ORM, so we might iterate over likely candidates
-        # But let's try a simpler approach: 
-        # Get all commodities with significant activity first
-        
-        active_commodities = self.db.query(
-            PriceHistory.commodity_id,
-            func.count(PriceHistory.id).label("cnt")
-        ).filter(
-            PriceHistory.price_date >= start_date
-        ).group_by(
-            PriceHistory.commodity_id
-        ).having(func.count(PriceHistory.id) >= 2).all()
-        
-        commodity_changes = []
-        
-        # Only iterate over commodities with data (much smaller set)
-        for row in active_commodities:
-            commodity_id = row.commodity_id
-            
-            # Efficiently get just first and last price
-            first_price = self.db.query(PriceHistory.modal_price).filter(
-                PriceHistory.commodity_id == commodity_id,
-                PriceHistory.price_date >= start_date
-            ).order_by(PriceHistory.price_date.asc()).limit(1).scalar()
-            
-            last_price = self.db.query(PriceHistory.modal_price).filter(
-                PriceHistory.commodity_id == commodity_id,
-                PriceHistory.price_date >= start_date
-            ).order_by(PriceHistory.price_date.desc()).limit(1).scalar()
-            
-            if first_price and last_price and first_price > 0:
-                change = abs(((float(last_price) - float(first_price)) / float(first_price)) * 100)
-                
-                # Get name efficiently (could simplify by joining above, but this is fine)
-                name = self.db.query(Commodity.name).filter(Commodity.id == commodity_id).scalar()
-                
-                commodity_changes.append({
-                    "commodity_id": commodity_id,
-                    "name": name,
-                    "record_count": row.cnt,
-                    "price_change": change,
-                })
-        
-        # Sort and limit
-        commodity_changes.sort(key=lambda x: x["price_change"], reverse=True)
-        
+
+        query = text("""
+            WITH date_bounds AS (
+                SELECT
+                    commodity_id,
+                    MIN(price_date) AS first_date,
+                    MAX(price_date) AS last_date,
+                    COUNT(*) AS record_count
+                FROM price_history
+                WHERE price_date >= :start_date
+                GROUP BY commodity_id
+                HAVING COUNT(*) >= 2
+                   AND MIN(price_date) != MAX(price_date)
+            ),
+            first_prices AS (
+                SELECT DISTINCT ON (ph.commodity_id)
+                    ph.commodity_id,
+                    ph.modal_price AS first_price
+                FROM price_history ph
+                JOIN date_bounds db ON db.commodity_id = ph.commodity_id
+                    AND ph.price_date = db.first_date
+                ORDER BY ph.commodity_id, ph.price_date ASC
+            ),
+            last_prices AS (
+                SELECT DISTINCT ON (ph.commodity_id)
+                    ph.commodity_id,
+                    ph.modal_price AS last_price
+                FROM price_history ph
+                JOIN date_bounds db ON db.commodity_id = ph.commodity_id
+                    AND ph.price_date = db.last_date
+                ORDER BY ph.commodity_id, ph.price_date DESC
+            )
+            SELECT
+                db.commodity_id,
+                c.name,
+                db.record_count,
+                CASE WHEN fp.first_price > 0
+                    THEN ABS(((lp.last_price - fp.first_price) / fp.first_price) * 100)
+                    ELSE 0
+                END AS price_change
+            FROM date_bounds db
+            JOIN commodities c ON c.id = db.commodity_id
+            JOIN first_prices fp ON fp.commodity_id = db.commodity_id
+            JOIN last_prices lp ON lp.commodity_id = db.commodity_id
+            ORDER BY price_change DESC
+            LIMIT :limit
+        """)
+
+        rows = self.db.execute(query, {
+            "start_date": start_date,
+            "limit": limit,
+        }).fetchall()
+
         return [
             TopCommodityItem(
-                commodity_id=item["commodity_id"],
-                name=item["name"],
-                record_count=item["record_count"],
+                commodity_id=row.commodity_id,
+                name=row.name,
+                record_count=row.record_count,
             )
-            for item in commodity_changes[:limit]
+            for row in rows
         ]
 
     def get_top_mandis_by_records(self, limit: int = 10) -> list[TopMandiItem]:
-        """Get mandis with most price records."""
+        """Get mandis with most price records (last 30 days)."""
+        cutoff = date.today() - timedelta(days=30)
         results = self.db.query(
             Mandi.id.label("mandi_id"),
             Mandi.name,
             func.count(PriceHistory.id).label("record_count"),
         ).join(
             PriceHistory, PriceHistory.mandi_id == Mandi.id
+        ).filter(
+            PriceHistory.price_date >= cutoff
         ).group_by(
             Mandi.id, Mandi.name
         ).order_by(
@@ -409,71 +407,86 @@ class AnalyticsService:
         self,
         commodity_id: UUID,
     ) -> CommodityPriceComparisonResponse | None:
-        """Compare prices for a commodity across all mandis."""
+        """Compare prices for a commodity across all mandis.
+
+        OPTIMIZED: Single query using DISTINCT ON to get latest price
+        per mandi plus average, instead of N+1 queries.
+        """
+        from sqlalchemy import text
+
         commodity = self.db.query(Commodity).filter(Commodity.id == commodity_id).first()
 
         if not commodity:
             return None
 
-        # Get latest price and average for each mandi
-        results = self.db.query(
-            Mandi.id.label("mandi_id"),
-            Mandi.name.label("mandi_name"),
-            func.avg(PriceHistory.modal_price).label("avg_price"),
-        ).join(
-            PriceHistory, PriceHistory.mandi_id == Mandi.id
-        ).filter(
-            PriceHistory.commodity_id == commodity_id,
-        ).group_by(
-            Mandi.id, Mandi.name
-        ).all()
+        query = text("""
+            WITH latest_prices AS (
+                SELECT DISTINCT ON (ph.mandi_id)
+                    m.id AS mandi_id,
+                    m.name AS mandi_name,
+                    ph.modal_price AS current_price
+                FROM price_history ph
+                JOIN mandis m ON m.id = ph.mandi_id
+                WHERE ph.commodity_id = :commodity_id
+                ORDER BY ph.mandi_id, ph.price_date DESC
+            ),
+            avg_prices AS (
+                SELECT
+                    ph.mandi_id,
+                    AVG(ph.modal_price) AS avg_price
+                FROM price_history ph
+                WHERE ph.commodity_id = :commodity_id
+                GROUP BY ph.mandi_id
+            )
+            SELECT
+                lp.mandi_id,
+                lp.mandi_name,
+                lp.current_price,
+                ap.avg_price
+            FROM latest_prices lp
+            JOIN avg_prices ap ON ap.mandi_id = lp.mandi_id
+        """)
 
-        if not results:
+        rows = self.db.execute(query, {"commodity_id": commodity_id}).fetchall()
+
+        if not rows:
             return None
 
-        mandi_prices = []
-        for row in results:
-            # Get latest price for this mandi
-            latest = self.db.query(PriceHistory.modal_price).filter(
-                PriceHistory.commodity_id == commodity_id,
-                PriceHistory.mandi_id == row.mandi_id,
-            ).order_by(PriceHistory.price_date.desc()).first()
-
-            current_price = float(latest[0]) if latest else 0.0
-
-            mandi_prices.append(MandiPriceItem(
+        mandi_prices = [
+            MandiPriceItem(
                 mandi_id=row.mandi_id,
                 mandi_name=row.mandi_name,
-                current_price=round(current_price, 2),
+                current_price=round(float(row.current_price), 2),
                 avg_price=round(float(row.avg_price), 2),
-            ))
+            )
+            for row in rows
+        ]
 
         # Find lowest and highest
-        if mandi_prices:
-            lowest = min(mandi_prices, key=lambda x: x.current_price)
-            highest = max(mandi_prices, key=lambda x: x.current_price)
-            price_spread = highest.current_price - lowest.current_price
-        else:
-            lowest = highest = None
-            price_spread = 0.0
+        lowest = min(mandi_prices, key=lambda x: x.current_price)
+        highest = max(mandi_prices, key=lambda x: x.current_price)
+        price_spread = highest.current_price - lowest.current_price
 
         return CommodityPriceComparisonResponse(
             commodity_id=commodity_id,
             commodity_name=commodity.name,
             mandi_prices=mandi_prices,
-            lowest_price_mandi=lowest.mandi_name if lowest else None,
-            highest_price_mandi=highest.mandi_name if highest else None,
+            lowest_price_mandi=lowest.mandi_name,
+            highest_price_mandi=highest.mandi_name,
             price_spread=round(price_spread, 2),
         )
 
     def get_weekly_price_trends(self) -> list:
         """Get average prices for the last 7 days that have data for dashboard chart."""
         from datetime import datetime
-        
-        # Get the last 7 distinct dates that have price data
+
+        # Restrict to last 30 days to avoid scanning all 25M rows
+        cutoff = date.today() - timedelta(days=30)
         dates_with_data = self.db.query(
             PriceHistory.price_date,
             func.avg(PriceHistory.modal_price).label('avg_price')
+        ).filter(
+            PriceHistory.price_date >= cutoff
         ).group_by(
             PriceHistory.price_date
         ).order_by(
@@ -503,25 +516,19 @@ class AnalyticsService:
         return weekly_data
 
     def get_dashboard(self) -> DashboardResponse:
-        """Get combined dashboard data."""
-        market_summary = self.get_market_summary()
+        """Get combined dashboard data (OPTIMIZED)."""
+        market_summary = self.get_market_summary()  # Now optimized to 1 query
         top_commodities = self.get_top_commodities_by_price_change(limit=5, days=7)
         top_mandis = self.get_top_mandis_by_records(limit=5)
         weekly_trends = self.get_weekly_price_trends()
 
-        # Get recent price changes for top commodities
-        recent_price_changes = []
-        for commodity in top_commodities[:5]:
-            stats = self.get_price_statistics(
-                commodity_id=commodity.commodity_id,
-                days=7,
-            )
-            if stats:
-                recent_price_changes.append(stats)
-
+        # REMOVED: Expensive loop that was calling get_price_statistics() 5 times
+        # This was causing 5-10 additional database queries and 2-5s delay
+        # The dashboard already shows top_commodities which provides similar info
+        
         return DashboardResponse(
             market_summary=market_summary,
-            recent_price_changes=recent_price_changes,
+            recent_price_changes=[],  # Empty - removed for performance
             top_commodities=top_commodities,
             top_mandis=top_mandis,
             weekly_trends=weekly_trends,

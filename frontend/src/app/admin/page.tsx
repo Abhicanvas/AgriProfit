@@ -103,6 +103,8 @@ export default function AdminPage() {
     enabled: !!user && user.role === "admin",
     retry: 2,
     retryDelay: 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch users
@@ -114,6 +116,8 @@ export default function AdminPage() {
     enabled: !!user && user.role === "admin",
     retry: 2,
     retryDelay: 1000,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch posts
@@ -125,6 +129,8 @@ export default function AdminPage() {
     enabled: !!user && user.role === "admin",
     retry: 2,
     retryDelay: 1000,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Debug logging removed - was causing memory issues during tests

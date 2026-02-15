@@ -1,21 +1,23 @@
 import api from '@/lib/api';
 
 // Post types mapping (backend uses these values)
-export type PostType = 'discussion' | 'question' | 'tip' | 'announcement';
+export type PostType = 'discussion' | 'question' | 'tip' | 'announcement' | 'alert';
 
 // Display labels for post types
 export const POST_TYPE_LABELS: Record<PostType, string> = {
     discussion: 'General',
     question: 'Question',
     tip: 'Tip',
-    announcement: 'Alert',
+    announcement: 'Announcement',
+    alert: 'Alert',
 };
 
 export const POST_TYPE_COLORS: Record<PostType, string> = {
     discussion: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
     question: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
     tip: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-    announcement: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+    announcement: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+    alert: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
 };
 
 export interface CommunityPost {
@@ -26,16 +28,26 @@ export interface CommunityPost {
     post_type: PostType;
     district: string | null;
     is_admin_override: boolean;
+    image_url: string | null;
+    view_count: number;
+    is_pinned: boolean;
     created_at: string;
     updated_at: string;
     likes_count: number;
     replies_count: number;
     user_has_liked: boolean;
+    alert_highlight: boolean;
     // Extended fields (may be populated by joins)
     author_name?: string;
     author_state?: string;
     author_district?: string;
-    image_url?: string;
+}
+
+export interface AlertStatusResponse {
+    is_alert: boolean;
+    should_highlight: boolean;
+    in_affected_area: boolean;
+    author_district: string | null;
 }
 
 export interface CommunityPostListResponse {
@@ -59,6 +71,7 @@ export interface CreatePostData {
     content: string;
     post_type: PostType;
     district?: string;
+    image_url?: string;
 }
 
 export interface UpdatePostData {
@@ -173,6 +186,14 @@ export const communityService = {
         const response = await api.get(`/community/posts/district/${district}`, {
             params: { limit }
         });
+        return response.data;
+    },
+
+    /**
+     * Get alert status for a post (whether it affects the current user's area)
+     */
+    async getAlertStatus(postId: string): Promise<AlertStatusResponse> {
+        const response = await api.get(`/community/posts/${postId}/alert-status`);
         return response.data;
     },
 };

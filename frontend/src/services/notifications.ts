@@ -211,11 +211,12 @@ export const notificationsService = {
     },
 
     /**
-     * Clear all notifications
+     * Clear all notifications (delete all read notifications)
      */
     async clearAllNotifications(): Promise<boolean> {
         try {
-            await api.delete('/notifications');
+            // Backend endpoint is /notifications/read (deletes all read notifications)
+            await api.delete('/notifications/read');
             return true;
         } catch (error) {
             console.error('Failed to clear notifications:', error);

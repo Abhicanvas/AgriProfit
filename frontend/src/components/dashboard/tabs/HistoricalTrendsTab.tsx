@@ -1,15 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
     Select,
     SelectContent,
@@ -21,6 +13,15 @@ import { Button } from "@/components/ui/button"
 import { Download, Loader2 } from "lucide-react"
 import { pricesService, HistoricalPrice } from "@/services/prices"
 import { commoditiesService } from "@/services/commodities"
+
+// Dynamic import recharts for code splitting
+const LineChart = dynamic(() => import("recharts").then(m => m.LineChart), { ssr: false })
+const Line = dynamic(() => import("recharts").then(m => m.Line), { ssr: false })
+const XAxis = dynamic(() => import("recharts").then(m => m.XAxis), { ssr: false })
+const YAxis = dynamic(() => import("recharts").then(m => m.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import("recharts").then(m => m.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip), { ssr: false })
+const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer), { ssr: false })
 
 export function HistoricalTrendsTab() {
     const [data, setData] = useState<HistoricalPrice[]>([])

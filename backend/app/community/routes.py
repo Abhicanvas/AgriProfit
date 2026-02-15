@@ -20,11 +20,16 @@ from app.community.schemas import (
     CommunityPostListResponse,
     CommunityReplyCreate,
     CommunityReplyResponse,
+    AlertStatusResponse,
     VALID_POST_TYPES,
 )
 from app.community.service import CommunityPostService
+from app.community.alert_service import AlertNotificationService
 from app.auth.security import get_current_user, get_current_user_optional, require_role
 from app.core.rate_limit import limiter, RATE_LIMIT_READ, RATE_LIMIT_WRITE
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/community/posts", tags=["Community"])
 
@@ -46,10 +51,25 @@ async def create_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CommunityPostResponse:
-    """Create a new community post (requires authentication)."""
+    """Create a new community post (requires authentication).
+
+    If post_type is 'alert', notifications are sent to users in the
+    author's district and neighboring districts.
+    """
     service = CommunityPostService(db)
     try:
         post = service.create(post_data, user_id=current_user.id)
+
+        # If alert post, create notifications for neighboring districts
+        notifications_sent = 0
+        if post.post_type == "alert":
+            alert_service = AlertNotificationService(db)
+            notifications_sent = alert_service.create_alert_notifications(post, current_user)
+            logger.info(
+                "Alert post %s created by user %s: %d notifications sent",
+                post.id, current_user.id, notifications_sent,
+            )
+
         # Enrich with author name
         response_dict = {**post.__dict__}
         response_dict['author_name'] = current_user.name
@@ -96,7 +116,7 @@ async def get_post(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> CommunityPostResponse:
-    """Get a single community post by ID."""
+    """Get a single community post by ID. Increments view count."""
     service = CommunityPostService(db)
     post = service.get_by_id(post_id)
     if not post:
@@ -104,13 +124,25 @@ async def get_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found",
         )
+
+    # Increment view count
+    service.increment_view_count(post_id)
+
     # Build response with user_has_liked and author_name
     post_dict = {**post.__dict__}
+    post_dict["view_count"] = (post.view_count or 0) + 1  # reflect the increment
     if hasattr(post, 'user') and post.user:
         post_dict['author_name'] = post.user.name
     response = CommunityPostResponse(**post_dict)
     if current_user:
         response.user_has_liked = service.has_user_liked(post_id, current_user.id)
+
+        # Add alert highlight status
+        if post.post_type == "alert":
+            alert_service = AlertNotificationService(db)
+            alert_status = alert_service.get_alert_status(post, current_user)
+            response.alert_highlight = alert_status["should_highlight"]
+
     return response
 
 
@@ -127,8 +159,9 @@ async def list_posts(
     skip: int = Query(default=0, ge=0, description="Records to skip"),
     limit: int = Query(default=100, ge=1, le=100, description="Max records"),
     user_id: UUID | None = Query(default=None, description="Filter by author"),
-    post_type: str | None = Query(default=None, description="Filter by type (discussion, question, tip, announcement)"),
+    post_type: str | None = Query(default=None, description="Filter by type (discussion, question, tip, announcement, alert)"),
     district: str | None = Query(default=None, description="Filter by district code"),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> CommunityPostListResponse:
     """List community posts with optional filtering."""
     # Validate post_type if provided
@@ -148,13 +181,20 @@ async def list_posts(
         district=district,
     )
 
-    # Enrich posts with author names
+    # Enrich posts with author names and alert status
+    alert_service = AlertNotificationService(db) if current_user else None
     enriched_posts = []
     for post in posts:
         post_dict = {**post.__dict__}
         # Get author name from the joined user relationship
         if hasattr(post, 'user') and post.user:
             post_dict['author_name'] = post.user.name
+
+        # Add alert highlight for alert posts if user is logged in
+        if post.post_type == "alert" and alert_service and current_user:
+            alert_status = alert_service.get_alert_status(post, current_user)
+            post_dict["alert_highlight"] = alert_status["should_highlight"]
+
         enriched_posts.append(CommunityPostResponse(**post_dict))
 
     total = service.count(
@@ -478,6 +518,65 @@ async def add_reply(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
+
+
+@router.get(
+    "/{post_id}/alert-status",
+    response_model=AlertStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Alert Status",
+    description="Check if an alert post should be highlighted for the current user based on district proximity.",
+    responses={
+        200: {"description": "Alert status", "model": AlertStatusResponse},
+        404: {"description": "Post not found"},
+    }
+)
+async def get_alert_status(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AlertStatusResponse:
+    """Check if an alert post affects the current user's area."""
+    service = CommunityPostService(db)
+    post = service.get_by_id(post_id)
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found",
+        )
+
+    alert_service = AlertNotificationService(db)
+    result = alert_service.get_alert_status(post, current_user)
+    return AlertStatusResponse(**result)
+
+
+@router.post(
+    "/{post_id}/pin",
+    response_model=CommunityPostResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Pin Post (Admin)",
+    description="Pin or unpin a community post. Pinned posts appear first. Requires admin role.",
+    responses={
+        200: {"description": "Post pinned/unpinned", "model": CommunityPostResponse},
+        403: {"description": "Admin role required"},
+        404: {"description": "Post not found"},
+    }
+)
+async def pin_post(
+    post_id: UUID,
+    is_pinned: bool = Query(..., description="Pin (true) or unpin (false)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+) -> CommunityPostResponse:
+    """Pin or unpin a post (admin only)."""
+    service = CommunityPostService(db)
+    post = service.set_pinned(post_id, is_pinned)
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found",
+        )
+    return post
 
 
 @router.post(

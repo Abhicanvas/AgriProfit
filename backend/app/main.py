@@ -188,9 +188,12 @@ async def lifespan(app: FastAPI):
     # Start background scheduler for price syncing
     scheduler = None
     try:
-        from app.integrations.scheduler import start_scheduler
+        from app.integrations.scheduler import start_scheduler, trigger_startup_sync
         scheduler = start_scheduler()
         logger.info("Background scheduler started for automatic price syncing")
+        
+        # Trigger initial sync on startup
+        trigger_startup_sync()
     except Exception as e:
         logger.error(f"Failed to start scheduler: {e}", exc_info=True)
         logger.warning("API will continue without automatic price syncing")
@@ -324,20 +327,20 @@ app.add_middleware(RequestLoggingMiddleware)
 # ROUTERS
 # =============================================================================
 
-app.include_router(auth_router)
-app.include_router(commodities_router)
-app.include_router(mandis_router)
-app.include_router(users_router)
-app.include_router(prices_router)
-app.include_router(forecasts_router)
-app.include_router(community_router)
-app.include_router(notifications_router)
-app.include_router(admin_router)
-app.include_router(analytics_router)
-app.include_router(transport_router)
-app.include_router(uploads_router)
-app.include_router(inventory_router)
-app.include_router(sales_router)
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(commodities_router, prefix="/api/v1")
+app.include_router(mandis_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
+app.include_router(prices_router, prefix="/api/v1")
+app.include_router(forecasts_router, prefix="/api/v1")
+app.include_router(community_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(transport_router, prefix="/api/v1")
+app.include_router(uploads_router, prefix="/api/v1")
+app.include_router(inventory_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
 
 
 # =============================================================================

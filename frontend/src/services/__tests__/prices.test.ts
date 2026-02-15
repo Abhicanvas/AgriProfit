@@ -53,8 +53,8 @@ describe('Prices Service', () => {
 
       await pricesService.getCurrentPrices({ commodity: 'Wheat' })
 
-      expect(api.get).toHaveBeenCalledWith('/prices/current', { 
-        params: { commodity: 'Wheat' } 
+      expect(api.get).toHaveBeenCalledWith('/prices/current', {
+        params: { commodity: 'Wheat' }
       })
     })
 
@@ -64,8 +64,8 @@ describe('Prices Service', () => {
 
       await pricesService.getCurrentPrices({ state: 'Delhi' })
 
-      expect(api.get).toHaveBeenCalledWith('/prices/current', { 
-        params: { state: 'Delhi' } 
+      expect(api.get).toHaveBeenCalledWith('/prices/current', {
+        params: { state: 'Delhi' }
       })
     })
 
@@ -75,8 +75,8 @@ describe('Prices Service', () => {
 
       await pricesService.getCurrentPrices({ district: 'Karnal' })
 
-      expect(api.get).toHaveBeenCalledWith('/prices/current', { 
-        params: { district: 'Karnal' } 
+      expect(api.get).toHaveBeenCalledWith('/prices/current', {
+        params: { district: 'Karnal' }
       })
     })
 
@@ -84,49 +84,25 @@ describe('Prices Service', () => {
       const mockData = { prices: [] }
       vi.mocked(api.get).mockResolvedValue({ data: mockData })
 
-      await pricesService.getCurrentPrices({ 
+      await pricesService.getCurrentPrices({
         commodity: 'Wheat',
         state: 'Punjab',
         district: 'Ludhiana'
       })
 
-      expect(api.get).toHaveBeenCalledWith('/prices/current', { 
-        params: { 
+      expect(api.get).toHaveBeenCalledWith('/prices/current', {
+        params: {
           commodity: 'Wheat',
           state: 'Punjab',
           district: 'Ludhiana'
-        } 
+        }
       })
     })
 
-    it('returns mock data on API error', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('throws on API error', async () => {
       vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
 
-      const result = await pricesService.getCurrentPrices()
-
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to fetch current prices',
-        expect.any(Error)
-      )
-      expect(result.prices).toHaveLength(3)
-      expect(result.prices[0]).toHaveProperty('commodity', 'Wheat')
-      expect(result.prices[1]).toHaveProperty('commodity', 'Rice')
-      expect(result.prices[2]).toHaveProperty('commodity', 'Onion')
-
-      consoleError.mockRestore()
-    })
-
-    it('handles network errors gracefully', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('Network Error'))
-
-      const result = await pricesService.getCurrentPrices()
-
-      expect(result).toHaveProperty('prices')
-      expect(Array.isArray(result.prices)).toBe(true)
-
-      consoleError.mockRestore()
+      await expect(pricesService.getCurrentPrices()).rejects.toThrow('API Error')
     })
 
     it('returns data with correct structure', async () => {
@@ -217,60 +193,12 @@ describe('Prices Service', () => {
       })
     })
 
-    it('returns mock data on API error', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('throws on API error', async () => {
       vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
 
-      const result = await pricesService.getHistoricalPrices({
-        commodity: 'Wheat',
-        mandi_id: '123',
-        days: 30
-      })
-
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to fetch historical prices',
-        expect.any(Error)
-      )
-      expect(result.data).toBeDefined()
-      expect(result.data.length).toBeGreaterThan(0)
-
-      consoleError.mockRestore()
-    })
-
-    it('mock data has correct date format', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
-
-      const result = await pricesService.getHistoricalPrices({
-        commodity: 'Wheat',
-        mandi_id: '123',
-        days: 30
-      })
-
-      result.data.forEach(entry => {
-        expect(entry).toHaveProperty('date')
-        expect(entry).toHaveProperty('price')
-        expect(entry.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-        expect(typeof entry.price).toBe('number')
-      })
-
-      consoleError.mockRestore()
-    })
-
-    it('handles network errors gracefully', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('Network timeout'))
-
-      const result = await pricesService.getHistoricalPrices({
-        commodity: 'Rice',
-        mandi_id: '999',
-        days: 7
-      })
-
-      expect(result).toHaveProperty('data')
-      expect(Array.isArray(result.data)).toBe(true)
-
-      consoleError.mockRestore()
+      await expect(
+        pricesService.getHistoricalPrices({ commodity: 'Wheat', mandi_id: '123', days: 30 })
+      ).rejects.toThrow('API Error')
     })
   })
 
@@ -315,64 +243,10 @@ describe('Prices Service', () => {
       expect(api.get).toHaveBeenCalledWith('/prices/top-movers', { params: { limit: 3 } })
     })
 
-    it('returns mock data on API error', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('throws on API error', async () => {
       vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
 
-      const result = await pricesService.getTopMovers()
-
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to fetch top movers',
-        expect.any(Error)
-      )
-      expect(result.gainers).toHaveLength(3)
-      expect(result.losers).toHaveLength(2)
-
-      consoleError.mockRestore()
-    })
-
-    it('mock gainers have positive change percent', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
-
-      const result = await pricesService.getTopMovers()
-
-      result.gainers.forEach(gainer => {
-        expect(gainer.change_percent).toBeGreaterThan(0)
-        expect(gainer).toHaveProperty('commodity')
-        expect(gainer).toHaveProperty('price')
-      })
-
-      consoleError.mockRestore()
-    })
-
-    it('mock losers have negative change percent', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
-
-      const result = await pricesService.getTopMovers()
-
-      result.losers.forEach(loser => {
-        expect(loser.change_percent).toBeLessThan(0)
-        expect(loser).toHaveProperty('commodity')
-        expect(loser).toHaveProperty('price')
-      })
-
-      consoleError.mockRestore()
-    })
-
-    it('handles network errors gracefully', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('Network Error'))
-
-      const result = await pricesService.getTopMovers(5)
-
-      expect(result).toHaveProperty('gainers')
-      expect(result).toHaveProperty('losers')
-      expect(Array.isArray(result.gainers)).toBe(true)
-      expect(Array.isArray(result.losers)).toBe(true)
-
-      consoleError.mockRestore()
+      await expect(pricesService.getTopMovers()).rejects.toThrow('API Error')
     })
   })
 
@@ -403,7 +277,7 @@ describe('Prices Service', () => {
     })
 
     it('fetches prices with date range filter', async () => {
-      const mockData = []
+      const mockData: any[] = []
       vi.mocked(api.get).mockResolvedValue({ data: mockData })
 
       await pricesService.getPricesByMandi('mandi-456', {
@@ -421,7 +295,7 @@ describe('Prices Service', () => {
     })
 
     it('fetches prices with custom limit', async () => {
-      const mockData = []
+      const mockData: any[] = []
       vi.mocked(api.get).mockResolvedValue({ data: mockData })
 
       await pricesService.getPricesByMandi('mandi-789', { limit: 50 })
@@ -432,7 +306,7 @@ describe('Prices Service', () => {
     })
 
     it('fetches prices with all parameters', async () => {
-      const mockData = []
+      const mockData: any[] = []
       vi.mocked(api.get).mockResolvedValue({ data: mockData })
 
       await pricesService.getPricesByMandi('mandi-999', {
@@ -450,71 +324,21 @@ describe('Prices Service', () => {
       })
     })
 
-    it('returns empty array on API error', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('throws on API error', async () => {
       vi.mocked(api.get).mockRejectedValue(new Error('API Error'))
 
-      const result = await pricesService.getPricesByMandi('mandi-123')
-
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to fetch prices for mandi mandi-123',
-        expect.any(Error)
-      )
-      expect(result).toEqual([])
-
-      consoleError.mockRestore()
-    })
-
-    it('handles 404 errors gracefully', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue({ response: { status: 404 } })
-
-      const result = await pricesService.getPricesByMandi('non-existent-mandi')
-
-      expect(result).toEqual([])
-
-      consoleError.mockRestore()
-    })
-
-    it('handles network errors gracefully', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.mocked(api.get).mockRejectedValue(new Error('Network timeout'))
-
-      const result = await pricesService.getPricesByMandi('mandi-500')
-
-      expect(result).toEqual([])
-      expect(Array.isArray(result)).toBe(true)
-
-      consoleError.mockRestore()
+      await expect(pricesService.getPricesByMandi('mandi-123')).rejects.toThrow('API Error')
     })
   })
 
   describe('Error Handling', () => {
-    it('all methods handle errors without throwing', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('all methods propagate errors', async () => {
       vi.mocked(api.get).mockRejectedValue(new Error('Server Error'))
 
-      await expect(pricesService.getCurrentPrices()).resolves.toBeDefined()
-      await expect(pricesService.getHistoricalPrices({ commodity: 'Test', mandi_id: '1', days: 7 })).resolves.toBeDefined()
-      await expect(pricesService.getTopMovers()).resolves.toBeDefined()
-      await expect(pricesService.getPricesByMandi('test')).resolves.toBeDefined()
-
-      consoleError.mockRestore()
-    })
-
-    it('logs errors to console', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const error = new Error('Test Error')
-      vi.mocked(api.get).mockRejectedValue(error)
-
-      await pricesService.getCurrentPrices()
-      await pricesService.getHistoricalPrices({ commodity: 'Test', mandi_id: '1', days: 7 })
-      await pricesService.getTopMovers()
-      await pricesService.getPricesByMandi('test')
-
-      expect(consoleError).toHaveBeenCalledTimes(4)
-
-      consoleError.mockRestore()
+      await expect(pricesService.getCurrentPrices()).rejects.toThrow()
+      await expect(pricesService.getHistoricalPrices({ commodity: 'Test', mandi_id: '1', days: 7 })).rejects.toThrow()
+      await expect(pricesService.getTopMovers()).rejects.toThrow()
+      await expect(pricesService.getPricesByMandi('test')).rejects.toThrow()
     })
   })
 })

@@ -77,6 +77,23 @@ export function CurrentPricesTab() {
 
     return (
         <div className="space-y-4">
+            {/* Info Banner */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                    <div className="text-blue-600 dark:text-blue-400 mt-0.5">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Enhanced Price Information</p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                            <strong>7-Day Avg:</strong> Compare current price with weekly average • <strong>30-Day Range:</strong> See price volatility • <strong>Trend:</strong> Rising/Falling/Stable indicator based on recent pattern
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -110,12 +127,15 @@ export function CurrentPricesTab() {
 
             <div className="rounded-md border overflow-hidden">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[640px]">
+                    <Table className="min-w-[900px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Commodity</TableHead>
                                 <TableHead>Mandi</TableHead>
                                 <TableHead className="text-right">Price (₹/kg)</TableHead>
+                                <TableHead className="text-right">7-Day Avg</TableHead>
+                                <TableHead className="text-right">30-Day Range</TableHead>
+                                <TableHead className="text-center">Trend</TableHead>
                                 <TableHead className="text-right">Change</TableHead>
                                 <TableHead className="text-right">Last Updated</TableHead>
                             </TableRow>
@@ -123,7 +143,7 @@ export function CurrentPricesTab() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         <div className="flex justify-center items-center">
                                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                                         </div>
@@ -131,53 +151,100 @@ export function CurrentPricesTab() {
                                 </TableRow>
                             ) : prices.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                         No prices found
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                prices.slice(0, displayCount).map((price, index) => (
-                                    <TableRow key={index}>
-                                        <TableCell className="font-medium">
-                                            <Link 
-                                                href={`/commodities/${price.commodity_id}`}
-                                                className="hover:text-primary hover:underline transition-colors"
-                                            >
-                                                {price.commodity}
-                                            </Link>
-                                            <div className="text-xs text-muted-foreground sm:hidden">
-                                                {price.state}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            {price.mandi_name}
-                                            <div className="text-xs text-muted-foreground hidden sm:block">
-                                                {price.district}, {price.state}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right font-semibold">
-                                            ₹{price.price_per_kg.toFixed(2)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className={`flex items-center justify-end gap-1 ${price.change_percent >= 0 ? "text-green-600" : "text-red-600"
-                                                }`}>
-                                                {price.change_percent >= 0 ? (
-                                                    <ArrowUpRight className="h-4 w-4" />
+                                prices.slice(0, displayCount).map((price, index) => {
+                                    const isPriceAboveAvg = price.avg_7d && price.price_per_kg > price.avg_7d;
+                                    const isPriceBelowAvg = price.avg_7d && price.price_per_kg < price.avg_7d;
+                                    
+                                    return (
+                                        <TableRow key={index}>
+                                            <TableCell className="font-medium">
+                                                <Link 
+                                                    href={`/commodities/${price.commodity_id}`}
+                                                    className="hover:text-primary hover:underline transition-colors"
+                                                >
+                                                    {price.commodity}
+                                                </Link>
+                                                <div className="text-xs text-muted-foreground sm:hidden">
+                                                    {price.state}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {price.mandi_name}
+                                                <div className="text-xs text-muted-foreground hidden sm:block">
+                                                    {price.district}, {price.state}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="font-semibold">₹{price.price_per_quintal.toFixed(2)}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    ₹{price.min_price.toFixed(0)} - ₹{price.max_price.toFixed(0)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {price.avg_7d ? (
+                                                    <>
+                                                        <div className="font-medium">₹{price.avg_7d.toFixed(2)}</div>
+                                                        <div className={`text-xs ${isPriceAboveAvg ? 'text-green-600' : isPriceBelowAvg ? 'text-red-600' : 'text-muted-foreground'}`}>
+                                                            {isPriceAboveAvg ? 'Above avg' : isPriceBelowAvg ? 'Below avg' : 'At avg'}
+                                                        </div>
+                                                    </>
                                                 ) : (
-                                                    <ArrowDownRight className="h-4 w-4" />
+                                                    <span className="text-muted-foreground text-sm">N/A</span>
                                                 )}
-                                                <span className="font-medium">{Math.abs(price.change_percent)}%</span>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {price.change_amount > 0 ? "+" : ""}
-                                                ₹{price.change_amount.toFixed(2)}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right text-muted-foreground text-sm">
-                                            {new Date(price.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {price.min_30d && price.max_30d ? (
+                                                    <>
+                                                        <div className="font-medium text-sm">
+                                                            ₹{price.min_30d.toFixed(0)} - ₹{price.max_30d.toFixed(0)}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            Range: ₹{(price.max_30d - price.min_30d).toFixed(0)}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">N/A</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                                    price.trend === 'up' 
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                        : price.trend === 'down'
+                                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                }`}>
+                                                    {price.trend === 'up' && <ArrowUpRight className="h-3 w-3" />}
+                                                    {price.trend === 'down' && <ArrowDownRight className="h-3 w-3" />}
+                                                    {price.trend === 'up' ? 'Rising' : price.trend === 'down' ? 'Falling' : 'Stable'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className={`flex items-center justify-end gap-1 ${price.change_percent >= 0 ? "text-green-600" : "text-red-600"
+                                                    }`}>
+                                                    {price.change_percent >= 0 ? (
+                                                        <ArrowUpRight className="h-4 w-4" />
+                                                    ) : (
+                                                        <ArrowDownRight className="h-4 w-4" />
+                                                    )}
+                                                    <span className="font-medium">{Math.abs(price.change_percent)}%</span>
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {price.change_amount > 0 ? "+" : ""}
+                                                    ₹{price.change_amount.toFixed(2)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right text-muted-foreground text-sm">
+                                                {new Date(price.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>

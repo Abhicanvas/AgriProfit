@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -13,9 +14,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { LineChart, Table as TableIcon, Download, Info } from "lucide-react"
 import { forecastsService, ForecastResponse } from "@/services/forecasts"
-import { ForecastChart } from "./forecast/ForecastChart"
 import { ForecastTable } from "./forecast/ForecastTable"
 import { RecommendationsPanel } from "./forecast/RecommendationsPanel"
+
+// Lazy load chart component (recharts-dependent)
+const ForecastChart = dynamic(
+    () => import("./forecast/ForecastChart").then(m => m.ForecastChart),
+    { ssr: false, loading: () => <div className="h-[400px] flex items-center justify-center text-muted-foreground">Loading chart...</div> }
+)
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function PriceForecastSection() {

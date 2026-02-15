@@ -1,15 +1,14 @@
 import axios from 'axios';
+import { perfMonitor } from '@/utils/performance-monitor';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-
-console.log('[API] Initializing axios with baseURL:', baseURL);
+const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const api = axios.create({
     baseURL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 60000, // 60 second timeout (increased for database queries)
+    timeout: 90000, // Increased to 90s for slow queries
 });
 
 export const apiWithLongTimeout = axios.create({
@@ -17,12 +16,10 @@ export const apiWithLongTimeout = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 120000, // 2 minute timeout for slow endpoints
+    timeout: 60000,
 });
 
 api.interceptors.request.use((config) => {
-    console.log('[API] Request:', config.method?.toUpperCase(), config.url);
-
     // Only access localStorage in browser environment
     if (typeof window !== 'undefined') {
         const token = localStorage.getItem('token');
@@ -30,21 +27,27 @@ api.interceptors.request.use((config) => {
             config.headers.Authorization = `Bearer ${token}`;
         }
     }
+    // Track request start time for performance monitoring
+    (config as any)._startTime = performance.now();
     return config;
 }, (error) => {
-    console.error('[API] Request error:', error);
     return Promise.reject(error);
 });
 
 api.interceptors.response.use(
     (response) => {
-        console.log('[API] Response:', response.status, response.config.url);
+        const startTime = (response.config as any)._startTime;
+        if (startTime) {
+            const duration = performance.now() - startTime;
+            perfMonitor.recordAPI(response.config.url || '', duration, response.status);
+        }
         return response;
     },
     (error) => {
-        console.error('[API] Response error:', error.message, error.config?.url);
-        if (error.response && error.response.data) {
-            console.error('[API] Error details:', error.response.data);
+        const startTime = error.config?._startTime;
+        if (startTime) {
+            const duration = performance.now() - startTime;
+            perfMonitor.recordAPI(error.config?.url || '', duration, error.response?.status || 0);
         }
 
         if (error.response?.status === 401 && typeof window !== 'undefined') {

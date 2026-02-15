@@ -27,12 +27,16 @@ export default function InventoryPage() {
 
     const { data: inventory, isLoading } = useQuery({
         queryKey: ['inventory'],
-        queryFn: inventoryService.getInventory
+        queryFn: inventoryService.getInventory,
+        staleTime: 2 * 60 * 1000,
+        gcTime: 5 * 60 * 1000,
     });
 
     const { data: commodities } = useQuery({
         queryKey: ['commodities'],
-        queryFn: () => commoditiesService.getAll({ limit: 200 })
+        queryFn: () => commoditiesService.getAll({ limit: 500 }),
+        staleTime: 10 * 60 * 1000,
+        gcTime: 15 * 60 * 1000,
     });
 
     const addMutation = useMutation({

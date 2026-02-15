@@ -89,7 +89,7 @@ export default function CommoditiesPage() {
                 maxPrice: maxPrice,
                 sortBy: sortBy,
                 sortOrder: sortOrder,
-                limit: 500, // Increased from 100 to 500 to show all commodities
+                limit: 50, // Paginated - load more on demand
             }
 
             const response = await commoditiesService.getWithPrices(filters)
@@ -180,7 +180,7 @@ export default function CommoditiesPage() {
                                     Commodities
                                 </h1>
                                 <p className="text-muted-foreground mt-1">
-                                    Browse agricultural commodities across Kerala
+                                    Browse agricultural commodities across India
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">

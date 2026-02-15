@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@test/test-utils'
+import { render, screen, fireEvent, waitFor, within, act } from '@test/test-utils'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import AnalyticsPage from '../page'
@@ -49,6 +49,7 @@ vi.mock('@/services/prices', () => ({
   pricesService: {
     getPricesByMandi: vi.fn(),
     getCurrentPrices: vi.fn(),
+    getHistoricalPrices: vi.fn(),
   },
 }))
 
@@ -99,7 +100,8 @@ describe('AnalyticsPage', () => {
     vi.mocked(mandisService.getAll).mockResolvedValue(mockMandis)
     vi.mocked(mandisService.getStates).mockResolvedValue(mockStates)
     vi.mocked(pricesService.getPricesByMandi).mockResolvedValue([])
-    vi.mocked(pricesService.getCurrentPrices).mockResolvedValue([])
+    vi.mocked(pricesService.getCurrentPrices).mockResolvedValue({ prices: [] })
+    vi.mocked(pricesService.getHistoricalPrices).mockResolvedValue({ data: [] })
     vi.mocked(analyticsService.getDashboard).mockResolvedValue({})
   })
 
@@ -143,20 +145,22 @@ describe('AnalyticsPage', () => {
       renderWithClient(<AnalyticsPage />)
       
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search.*commodities/i)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/select up to 6/i)).toBeInTheDocument()
       })
     })
 
     it('opens commodity dropdown on search input focus', async () => {
       renderWithClient(<AnalyticsPage />)
-      const user = userEvent.setup()
-      
+
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search.*commodities/i)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/select up to 6/i)).toBeInTheDocument()
       })
 
-      const searchInput = screen.getByPlaceholderText(/search.*commodities/i)
-      await user.click(searchInput)
+      const searchInput = screen.getByPlaceholderText(/select up to 6/i)
+
+      await act(async () => {
+        searchInput.focus()
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Banana')).toBeInTheDocument()
@@ -166,13 +170,16 @@ describe('AnalyticsPage', () => {
     it('allows selecting commodity from dropdown', async () => {
       renderWithClient(<AnalyticsPage />)
       const user = userEvent.setup()
-      
+
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search.*commodities/i)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/select up to 6/i)).toBeInTheDocument()
       })
 
-      const searchInput = screen.getByPlaceholderText(/search.*commodities/i)
-      await user.click(searchInput)
+      const searchInput = screen.getByPlaceholderText(/select up to 6/i)
+
+      await act(async () => {
+        searchInput.focus()
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Banana')).toBeInTheDocument()
@@ -198,32 +205,44 @@ describe('AnalyticsPage', () => {
     })
 
     it('displays load more button when more commodities available', async () => {
-      // Create 50 commodities
-      const manyCommodities = Array.from({ length: 50 }, (_, i) => ({
-        id: `${i}`,
-        name: `Commodity${i}`,
-        category: 'Test',
+      // Create 50 prices to trigger "load more" (default displayCount is 20)
+      const manyPrices = Array.from({ length: 50 }, (_, i) => ({
+        commodity_id: `${i}`,
+        commodity: `Commodity${i}`,
+        mandi_name: 'Test Mandi',
+        state: 'Test',
+        district: 'Test',
+        price_per_kg: 20 + i,
+        change_percent: 0,
+        change_amount: 0,
+        updated_at: '2024-01-01T00:00:00Z',
       }))
-      vi.mocked(commoditiesService.getAll).mockResolvedValue(manyCommodities)
+      vi.mocked(pricesService.getCurrentPrices).mockResolvedValue({ prices: manyPrices })
 
       renderWithClient(<AnalyticsPage />)
-      
+
       await waitFor(() => {
         expect(screen.getByText(/load more/i)).toBeInTheDocument()
       })
     })
 
     it('loads more commodities when load more button clicked', async () => {
-      const manyCommodities = Array.from({ length: 50 }, (_, i) => ({
-        id: `${i}`,
-        name: `Commodity${i}`,
-        category: 'Test',
+      const manyPrices = Array.from({ length: 50 }, (_, i) => ({
+        commodity_id: `${i}`,
+        commodity: `Commodity${i}`,
+        mandi_name: 'Test Mandi',
+        state: 'Test',
+        district: 'Test',
+        price_per_kg: 20 + i,
+        change_percent: 0,
+        change_amount: 0,
+        updated_at: '2024-01-01T00:00:00Z',
       }))
-      vi.mocked(commoditiesService.getAll).mockResolvedValue(manyCommodities)
+      vi.mocked(pricesService.getCurrentPrices).mockResolvedValue({ prices: manyPrices })
 
       renderWithClient(<AnalyticsPage />)
       const user = userEvent.setup()
-      
+
       await waitFor(() => {
         expect(screen.getByText(/load more/i)).toBeInTheDocument()
       })

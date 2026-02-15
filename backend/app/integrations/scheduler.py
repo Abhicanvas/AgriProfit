@@ -7,6 +7,7 @@ Handles periodic tasks like:
 - Generating daily reports (future)
 """
 import logging
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -27,6 +28,32 @@ def sync_prices_job() -> None:
         f"records={result.records_fetched} "
         f"duration={result.duration_seconds:.1f}s"
     )
+
+
+def trigger_startup_sync() -> None:
+    """
+    Trigger an initial price sync on application startup.
+    
+    Runs in a background thread so it doesn't block the startup process.
+    """
+    if not settings.price_sync_enabled:
+        logger.info("Startup sync skipped (PRICE_SYNC_ENABLED=false)")
+        return
+    
+    def run_sync():
+        logger.info("Triggering startup price sync...")
+        service = get_sync_service()
+        result = service.sync()
+        logger.info(
+            f"Startup sync finished: status={result.status.value} "
+            f"records={result.records_fetched} "
+            f"duration={result.duration_seconds:.1f}s"
+        )
+    
+    # Run in background thread so startup isn't blocked
+    thread = threading.Thread(target=run_sync, daemon=True, name="StartupSync")
+    thread.start()
+    logger.info("Startup sync initiated in background thread")
 
 
 def start_scheduler() -> BackgroundScheduler:
