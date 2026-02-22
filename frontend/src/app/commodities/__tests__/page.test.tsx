@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@test/test-utils'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import CommoditiesPage from '../page'
@@ -137,7 +137,7 @@ describe('CommoditiesPage', () => {
     
     if (categoryButtons.length > 0) {
       // Try clicking a category button
-      const grainsButton = categoryButtons.find(btn => 
+      const grainsButton = categoryButtons.find((btn: HTMLElement) => 
         btn.textContent?.toLowerCase().includes('grain')
       )
       
