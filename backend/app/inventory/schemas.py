@@ -17,6 +17,7 @@ class InventoryUpdate(BaseModel):
 class InventoryResponse(InventoryBase):
     id: UUID
     user_id: UUID
+    quantity: float = Field(..., ge=0, description="Quantity of the commodity")  # Allow 0 for existing DB records
     commodity_name: str | None = None
     updated_at: datetime
     created_at: datetime

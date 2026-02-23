@@ -4,8 +4,12 @@ Transport cost calculation service.
 Refactored to functional style for direct testing and usage.
 """
 import math
-from typing import List, Optional, Dict, Any
+import httpx
+import logging
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.models import Mandi, Commodity, PriceHistory
 from app.transport.schemas import (
@@ -1035,6 +1039,77 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+
+# Simple in-process cache: (lat1,lon1,lat2,lon2) → road_km
+_road_distance_cache: Dict[Tuple, float] = {}
+
+# Terrain-based fallback multipliers by state pair (approximate)
+# Used when OSRM is unavailable.
+# Kerala is intentionally excluded from _HILLY_STATES: most Kerala transport runs
+# along the flat NH544 coastal corridor (Thrissur, Ernakulam, Kottayam, etc.).
+# Using the hilly multiplier (1.6) overestimates distances significantly for these routes.
+_HILLY_STATES = {"Himachal Pradesh", "Uttarakhand", "Jammu and Kashmir",
+                  "Arunachal Pradesh", "Sikkim", "Meghalaya", "Nagaland", "Manipur",
+                  "Mizoram", "Tripura", "Assam", "Goa"}
+
+# Kerala has mixed terrain (flat coast + inland Ghats). Use an intermediate multiplier.
+_SEMI_HILLY_STATES = {"Kerala", "Tamil Nadu", "Karnataka", "Andhra Pradesh",
+                       "Telangana", "Maharashtra", "Odisha", "West Bengal"}
+
+def _fallback_multiplier(source_state: str = "", dest_state: str = "") -> float:
+    """Return a terrain-aware Haversine→road multiplier when OSRM is unavailable."""
+    hilly_src = source_state in _HILLY_STATES
+    hilly_dst = dest_state in _HILLY_STATES
+    semi_src = source_state in _SEMI_HILLY_STATES
+    semi_dst = dest_state in _SEMI_HILLY_STATES
+    if hilly_src and hilly_dst:
+        return 1.6   # both fully hilly (e.g. HP→Uttarakhand)
+    if hilly_src or hilly_dst:
+        return 1.45  # one end fully hilly
+    if semi_src or semi_dst:
+        return 1.30  # semi-hilly (e.g. Kerala coast, peninsular states)
+    return 1.25      # flat terrain (plains)
+
+def get_road_distance(
+    lat1: float, lon1: float,
+    lat2: float, lon2: float,
+    source_state: str = "",
+    dest_state: str = "",
+) -> float:
+    """
+    Return accurate road distance (km) using OSRM public routing API.
+    Falls back to Haversine × terrain multiplier on failure.
+    Results are cached in-process.
+    """
+    cache_key = (round(lat1, 4), round(lon1, 4), round(lat2, 4), round(lon2, 4))
+    if cache_key in _road_distance_cache:
+        return _road_distance_cache[cache_key]
+
+    haversine_km = haversine_distance(lat1, lon1, lat2, lon2)
+
+    try:
+        url = (
+            f"http://router.project-osrm.org/route/v1/driving/"
+            f"{lon1},{lat1};{lon2},{lat2}"
+            f"?overview=false&steps=false"
+        )
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.get(url)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("code") == "Ok" and data.get("routes"):
+                road_km = data["routes"][0]["distance"] / 1000.0
+                _road_distance_cache[cache_key] = road_km
+                return road_km
+    except Exception as e:
+        logger.debug("OSRM unavailable, using fallback: %s", e)
+
+    # Fallback
+    multiplier = _fallback_multiplier(source_state, dest_state)
+    road_km = haversine_km * multiplier
+    _road_distance_cache[cache_key] = road_km
+    return road_km
+
 def select_vehicle(quantity_kg: float) -> VehicleType:
     """Select appropriate vehicle based on quantity."""
     if quantity_kg <= VEHICLES[VehicleType.TEMPO]["capacity_kg"]:
@@ -1067,13 +1142,13 @@ def calculate_net_profit(
     capacity = VEHICLES[vehicle_type]["capacity_kg"]
     trips = math.ceil(quantity_kg / capacity)
 
-    # 1. Freight Cost (round-trip)
+    # 1. Freight Cost (one-way: driver picks up return load independently)
     one_way_freight = calculate_transport_cost(distance_km, vehicle_type)
-    total_transport_cost = one_way_freight * trips * 2  # Round trip
+    total_transport_cost = one_way_freight * trips
 
-    # 2. Toll Charges (both ways)
+    # 2. Toll Charges (one-way only)
     toll_plazas = max(1, round(distance_km / TOLL_PLAZA_SPACING_KM))
-    toll_cost_per_trip = toll_plazas * VEHICLES[vehicle_type]["toll_per_plaza"] * 2
+    toll_cost_per_trip = toll_plazas * VEHICLES[vehicle_type]["toll_per_plaza"]
     total_toll_cost = toll_cost_per_trip * trips
 
     # 3. Loading & Unloading
@@ -1304,12 +1379,32 @@ def compare_mandis(request: TransportCompareRequest, db: Session = None) -> List
 
     comparisons: list[MandiComparison] = []
 
+    # Pre-filter and sort by haversine before calling OSRM
+    # This avoids unnecessary routing API calls for distant mandis
+    candidates = []
     for m in raw_mandis:
         if not m.get("latitude") or not m.get("longitude") or m.get("price_per_kg") is None:
             continue
+        straight_km = haversine_distance(source_lat, source_lon, m["latitude"], m["longitude"])
+        # Pre-filter: if max_distance set, skip mandis beyond it even in straight line
+        if request.max_distance_km and straight_km > request.max_distance_km:
+            continue
+        candidates.append((straight_km, m))
 
-        dist = haversine_distance(source_lat, source_lon, m["latitude"], m["longitude"])
-        road_dist = dist * ROAD_DISTANCE_MULTIPLIER
+    # Sort by straight-line distance and limit OSRM calls to nearest 40
+    candidates.sort(key=lambda x: x[0])
+    max_osrm_calls = 40
+    candidates = candidates[:max(max_osrm_calls, request.limit * 4)]
+
+    for straight_km, m in candidates:
+        # Get accurate road distance (OSRM with cache + terrain fallback)
+        dest_state = m.get("state") or ""
+        road_dist = get_road_distance(
+            source_lat, source_lon,
+            m["latitude"], m["longitude"],
+            source_state=request.source_state or "",
+            dest_state=dest_state,
+        )
 
         if request.max_distance_km and road_dist > request.max_distance_km:
             continue

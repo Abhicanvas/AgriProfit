@@ -363,6 +363,15 @@ export default function TransportPage() {
 
                     {results && results.length > 0 && (
                         <>
+                            {/* All-loss warning */}
+                            {results[0].net_profit <= 0 && (
+                                <Card className="border-red-400 border-2 bg-red-50/50">
+                                    <CardContent className="py-4">
+                                        <p className="text-red-700 font-semibold">⚠️ All options result in a net loss for this commodity and route. Consider selling locally or choosing a different commodity.</p>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* Best Option Analysis */}
                             {results[0].net_profit > 0 && (
                                 <Card className="border-green-500 border-2 bg-green-50/50">
@@ -446,11 +455,12 @@ export default function TransportPage() {
                                         </TableHeader>
                                         <TableBody>
                                             {results.map((r, i) => (
-                                                <TableRow key={i} className={i === 0 ? "bg-green-50 border-l-4 border-l-green-500" : ""}>
+                                                <TableRow key={i} className={i === 0 ? (r.net_profit > 0 ? "bg-green-50 border-l-4 border-l-green-500" : "bg-red-50 border-l-4 border-l-red-400") : ""}>
                                                     <TableCell className="font-medium">
                                                         <div>{r.mandi_name}</div>
                                                         {r.district && <div className="text-xs text-muted-foreground">{r.district}, {r.state}</div>}
-                                                        {i === 0 && <Badge className="mt-1 bg-green-600">Best Option</Badge>}
+                                                        {i === 0 && r.net_profit > 0 && <Badge className="mt-1 bg-green-600">Best Option</Badge>}
+                                                        {i === 0 && r.net_profit <= 0 && <Badge className="mt-1 bg-red-500">Least Loss</Badge>}
                                                     </TableCell>
                                                     <TableCell className="text-right">{r.distance_km} km</TableCell>
                                                     <TableCell className="text-right">₹{(r.price_per_kg * 100).toFixed(2)}</TableCell>
@@ -458,11 +468,11 @@ export default function TransportPage() {
                                                     <TableCell><Badge variant="outline">{VEHICLE_LABELS[r.vehicle_type] || r.vehicle_type}</Badge></TableCell>
                                                     <TableCell className="text-muted-foreground">{r.arrival_time}</TableCell>
                                                     <TableCell className="text-right">
-                                                        <Badge variant={r.roi_percentage > 500 ? "default" : r.roi_percentage > 300 ? "secondary" : "outline"}>
+                                                        <span className={`text-sm font-medium ${r.roi_percentage >= 0 ? "text-green-600" : "text-red-600"}`}>
                                                             {r.roi_percentage.toFixed(1)}%
-                                                        </Badge>
+                                                        </span>
                                                     </TableCell>
-                                                    <TableCell className="text-right font-semibold text-green-600">₹{r.net_profit.toLocaleString()}</TableCell>
+                                                    <TableCell className={`text-right font-semibold ${r.net_profit >= 0 ? "text-green-600" : "text-red-600"}`}>₹{r.net_profit.toLocaleString()}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
@@ -477,14 +487,14 @@ export default function TransportPage() {
                                         </h4>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
                                             <div className="space-y-1">
-                                                <p className="text-muted-foreground">Freight Cost (Round-trip)</p>
+                                                <p className="text-muted-foreground">Freight Cost (One-way)</p>
                                                 <p className="font-medium">₹{results[0].costs.freight.toLocaleString()}</p>
                                                 <p className="text-xs text-muted-foreground">{VEHICLE_LABELS[results[0].vehicle_type] || results[0].vehicle_type} × {results[0].trips} trip(s)</p>
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-muted-foreground">Toll Charges</p>
                                                 <p className="font-medium">₹{results[0].costs.toll.toLocaleString()}</p>
-                                                <p className="text-xs text-muted-foreground">Highway tolls (both ways)</p>
+                                                <p className="text-xs text-muted-foreground">Highway tolls (one-way)</p>
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-muted-foreground">Loading (Hamali)</p>
