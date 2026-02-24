@@ -23,15 +23,16 @@ class MandiService:
     def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calculate distance between two lat/lon points in kilometers using Haversine formula."""
         R = 6371  # Earth's radius in kilometers
-        
+
         lat1_rad = radians(lat1)
         lat2_rad = radians(lat2)
         delta_lat = radians(lat2 - lat1)
         delta_lon = radians(lon2 - lon1)
-        
-        a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
+
+        a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * \
+            cos(lat2_rad) * sin(delta_lon / 2) ** 2
         c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        
+
         return R * c
 
     def get_by_id(self, mandi_id: UUID) -> Mandi | None:
@@ -88,22 +89,24 @@ class MandiService:
         user_lon: float | None = None,
         user_district: str | None = None,
         user_state: str | None = None,
-        has_facility: str | None = None,  # "weighbridge", "storage", "loading_dock", "cold_storage"
+        # "weighbridge", "storage", "loading_dock", "cold_storage"
+        has_facility: str | None = None,
         min_rating: float | None = None,
         sort_by: str = "name",  # "name", "distance", "rating"
         sort_order: str = "asc",
     ) -> dict:
         """Get all mandis with advanced filtering and distance from user."""
-        
+
         # If user_district and user_state are provided but no coordinates, geocode them
         if user_district and user_state and not (user_lat and user_lon):
             from app.core.geocoding import geocoding_service
-            coords = geocoding_service.get_district_coordinates(user_district, user_state)
+            coords = geocoding_service.get_district_coordinates(
+                user_district, user_state)
             if coords:
                 user_lat, user_lon = coords
-        
+
         query = self.db.query(Mandi).filter(Mandi.is_active == True)
-        
+
         # Search filter
         if search:
             search_term = f"%{search}%"
@@ -112,21 +115,21 @@ class MandiService:
                 (Mandi.address.ilike(search_term)) |
                 (Mandi.market_code.ilike(search_term))
             )
-        
+
         # State filter
         if states and len(states) > 0:
             query = query.filter(Mandi.state.in_(states))
-        
+
         # District filter
         if district:
             query = query.filter(Mandi.district.ilike(f"%{district}%"))
-        
+
         # Commodity filter
         if commodity:
             query = query.filter(
                 Mandi.commodities_accepted.any(commodity)
             )
-        
+
         # Facility filters
         if has_facility:
             if has_facility == "weighbridge":
@@ -137,46 +140,51 @@ class MandiService:
                 query = query.filter(Mandi.has_loading_dock == True)
             elif has_facility == "cold_storage":
                 query = query.filter(Mandi.has_cold_storage == True)
-        
+
         # Rating filter
         if min_rating is not None:
             query = query.filter(Mandi.rating >= min_rating)
-        
+
         # Get total count before pagination
         total = query.count()
-        
+
         # Sorting - for non-distance sorts
         if sort_by == "name":
-            query = query.order_by(asc(Mandi.name) if sort_order == "asc" else desc(Mandi.name))
+            query = query.order_by(
+                asc(Mandi.name) if sort_order == "asc" else desc(Mandi.name))
         elif sort_by == "rating":
-            query = query.order_by(desc(Mandi.rating) if sort_order == "desc" else asc(Mandi.rating))
+            query = query.order_by(
+                desc(Mandi.rating) if sort_order == "desc" else asc(Mandi.rating))
         elif sort_by == "state":
-            query = query.order_by(asc(Mandi.state) if sort_order == "asc" else desc(Mandi.state))
-        
+            query = query.order_by(
+                asc(Mandi.state) if sort_order == "asc" else desc(Mandi.state))
+
         # Get mandis
         mandis = query.offset(skip).limit(limit).all()
-        
+
         # Batch fetch top prices for all mandis (OPTIMIZED - Single Query)
         # This eliminates the N+1 query problem where we were calling get_mandi_top_prices()
         # for each mandi individually. Now we fetch all prices in one query.
         mandi_ids = [mandi.id for mandi in mandis]
-        batch_top_prices = self.get_batch_top_prices(mandi_ids, limit_per_mandi=3)
-        
+        batch_top_prices = self.get_batch_top_prices(
+            mandi_ids, limit_per_mandi=3)
+
         # Enrich with distance and other data
         result_mandis = []
         for mandi in mandis:
             distance = None
             if user_lat is not None and user_lon is not None and mandi.latitude and mandi.longitude:
-                distance = round(self.haversine_distance(user_lat, user_lon, mandi.latitude, mandi.longitude), 2)
-                
+                distance = round(self.haversine_distance(
+                    user_lat, user_lon, mandi.latitude, mandi.longitude), 2)
+
                 # Apply max distance filter
                 if max_distance_km is not None and distance > max_distance_km:
                     total -= 1
                     continue
-            
+
             # Get pre-fetched top prices (no additional query needed!)
             top_prices = batch_top_prices.get(mandi.id, [])
-            
+
             result_mandis.append({
                 "id": str(mandi.id),
                 "name": mandi.name,
@@ -206,14 +214,15 @@ class MandiService:
                 "distance_km": distance,
                 "top_prices": top_prices,
             })
-        
+
         # Sort by distance if requested and we have user coordinates
         if sort_by == "distance" and user_lat is not None and user_lon is not None:
             result_mandis.sort(
-                key=lambda x: x["distance_km"] if x["distance_km"] is not None else float('inf'),
+                key=lambda x: x["distance_km"] if x["distance_km"] is not None else float(
+                    'inf'),
                 reverse=(sort_order == "desc")
             )
-        
+
         return {
             "mandis": result_mandis,
             "total": total,
@@ -231,7 +240,7 @@ class MandiService:
         ).filter(
             PriceHistory.mandi_id == mandi_id
         ).group_by(PriceHistory.commodity_id).subquery()
-        
+
         prices = self.db.query(
             PriceHistory.commodity_id,
             Commodity.name.label("commodity_name"),
@@ -251,7 +260,7 @@ class MandiService:
         ).order_by(
             desc(PriceHistory.modal_price)
         ).limit(limit).all()
-        
+
         return [
             {
                 "commodity_id": str(p.commodity_id),
@@ -267,71 +276,50 @@ class MandiService:
 
     def get_batch_top_prices(self, mandi_ids: list[UUID], limit_per_mandi: int = 3) -> dict[UUID, list[dict]]:
         """Get top commodity prices for multiple mandis in a single query (OPTIMIZED).
-        
-        This method eliminates the N+1 query problem by fetching top prices for all mandis
-        in a single database query instead of querying each mandi individually.
-        
-        Args:
-            mandi_ids: List of mandi UUIDs to fetch prices for
-            limit_per_mandi: Maximum number of top prices to return per mandi
-            
-        Returns:
-            Dictionary mapping mandi_id to list of top price dictionaries
+
+        Uses DISTINCT ON (mandi_id, commodity_id) ORDER BY price_date DESC to get the
+        latest price per commodity per mandi efficiently. Relies on the composite index
+        idx_price_history_mandi_commodity_date for performance.
         """
         if not mandi_ids:
             return {}
-        
-        # Subquery to get the latest price date for each commodity at each mandi
-        subquery = self.db.query(
-            PriceHistory.mandi_id,
-            PriceHistory.commodity_id,
-            func.max(PriceHistory.price_date).label("max_date")
-        ).filter(
-            PriceHistory.mandi_id.in_(mandi_ids)
-        ).group_by(
-            PriceHistory.mandi_id,
-            PriceHistory.commodity_id
-        ).subquery()
-        
-        # Get the actual price records
-        prices = self.db.query(
-            PriceHistory.mandi_id,
-            PriceHistory.commodity_id,
-            Commodity.name.label("commodity_name"),
-            Commodity.unit.label("unit"),
-            PriceHistory.modal_price,
-            PriceHistory.min_price,
-            PriceHistory.max_price,
-            PriceHistory.price_date
-        ).join(
-            subquery,
-            (PriceHistory.mandi_id == subquery.c.mandi_id) &
-            (PriceHistory.commodity_id == subquery.c.commodity_id) &
-            (PriceHistory.price_date == subquery.c.max_date)
-        ).join(
-            Commodity, PriceHistory.commodity_id == Commodity.id
-        ).order_by(
-            PriceHistory.mandi_id,
-            desc(PriceHistory.modal_price)
-        ).all()
-        
-        # Group by mandi_id and limit per mandi
-        result = {}
-        for mandi_id in mandi_ids:
-            result[mandi_id] = []
-        
-        for p in prices:
-            if len(result[p.mandi_id]) < limit_per_mandi:
-                result[p.mandi_id].append({
-                    "commodity_id": str(p.commodity_id),
-                    "commodity_name": p.commodity_name,
+
+        from sqlalchemy import text
+
+        # Use raw SQL with DISTINCT ON for best performance on 26M+ row tables.
+        # The index idx_price_history_mandi_commodity_date (mandi_id, commodity_id, price_date DESC)
+        # makes this an index-only scan.
+        sql = text("""
+            SELECT ph.mandi_id, ph.commodity_id, c.name AS commodity_name,
+                   ph.modal_price, ph.min_price, ph.max_price, ph.price_date
+            FROM (
+                SELECT DISTINCT ON (mandi_id, commodity_id)
+                    mandi_id, commodity_id, modal_price, min_price, max_price, price_date
+                FROM price_history
+                WHERE mandi_id = ANY(:mandi_ids)
+                ORDER BY mandi_id, commodity_id, price_date DESC
+            ) ph
+            JOIN commodities c ON c.id = ph.commodity_id
+            ORDER BY ph.mandi_id, ph.modal_price DESC
+        """)
+
+        rows = self.db.execute(sql, {"mandi_ids": list(mandi_ids)}).fetchall()
+
+        # Group by mandi_id and cap at limit_per_mandi
+        result: dict = {mid: [] for mid in mandi_ids}
+        for row in rows:
+            bucket = result.get(row.mandi_id)
+            if bucket is not None and len(bucket) < limit_per_mandi:
+                bucket.append({
+                    "commodity_id": str(row.commodity_id),
+                    "commodity_name": row.commodity_name,
                     "unit": "quintal",
-                    "modal_price": round(float(p.modal_price), 2),
-                    "min_price": round(float(p.min_price), 2) if p.min_price else None,
-                    "max_price": round(float(p.max_price), 2) if p.max_price else None,
-                    "as_of": str(p.price_date),
+                    "modal_price": round(float(row.modal_price), 2),
+                    "min_price": round(float(row.min_price), 2) if row.min_price else None,
+                    "max_price": round(float(row.max_price), 2) if row.max_price else None,
+                    "as_of": str(row.price_date),
                 })
-        
+
         return result
 
     def get_details(self, mandi_id: UUID, user_lat: float | None = None, user_lon: float | None = None) -> dict | None:
@@ -339,22 +327,23 @@ class MandiService:
         mandi = self.get_by_id(mandi_id)
         if not mandi:
             return None
-        
+
         # Calculate distance if user coordinates provided
         distance = None
         if user_lat is not None and user_lon is not None and mandi.latitude and mandi.longitude:
-            distance = round(self.haversine_distance(user_lat, user_lon, mandi.latitude, mandi.longitude), 2)
-        
+            distance = round(self.haversine_distance(
+                user_lat, user_lon, mandi.latitude, mandi.longitude), 2)
+
         # Get current prices for all commodities at this mandi
         current_prices = self.get_mandi_top_prices(mandi_id, limit=50)
-        
+
         # Get price trends (last 30 days trend)
         thirty_days_ago = datetime.now().date() - timedelta(days=30)
-        
+
         # Batch fetch old prices for all commodities (OPTIMIZED - Single Query)
         # This eliminates the N+1 query problem in price trend calculation
         commodity_ids = [p["commodity_id"] for p in current_prices]
-        
+
         if commodity_ids:
             old_prices_query = self.db.query(
                 PriceHistory.commodity_id,
@@ -364,26 +353,27 @@ class MandiService:
                 PriceHistory.commodity_id.in_(commodity_ids),
                 PriceHistory.price_date <= thirty_days_ago
             ).group_by(PriceHistory.commodity_id).all()
-            
+
             old_prices_map = {str(row.commodity_id): row.avg_price for row in old_prices_query}
         else:
             old_prices_map = {}
-        
+
         price_trends = []
         for price_item in current_prices:
             old_price_quintal = old_prices_map.get(price_item["commodity_id"])
-            
+
             change = None
             if old_price_quintal and old_price_quintal > 0:
                 # Convert old price from quintal to kg
                 old_price_kg = float(old_price_quintal) / 100
-                change = round(((price_item["modal_price"] - old_price_kg) / old_price_kg) * 100, 2)
-            
+                change = round(
+                    ((price_item["modal_price"] - old_price_kg) / old_price_kg) * 100, 2)
+
             price_trends.append({
                 **price_item,
                 "price_change_30d": change,
             })
-        
+
         return {
             "id": str(mandi.id),
             "name": mandi.name,
@@ -447,12 +437,12 @@ class MandiService:
     def compare(self, mandi_ids: list[UUID], user_lat: float | None = None, user_lon: float | None = None) -> dict:
         """Compare multiple mandis side by side."""
         mandis_data = []
-        
+
         for mandi_id in mandi_ids[:5]:  # Max 5 mandis
             details = self.get_details(mandi_id, user_lat, user_lon)
             if details:
                 mandis_data.append(details)
-        
+
         return {
             "mandis": mandis_data,
             "comparison_date": datetime.now().isoformat(),
@@ -484,7 +474,8 @@ class MandiService:
             return mandi
         except IntegrityError:
             self.db.rollback()
-            raise ValueError(f"Mandi with market code '{mandi_data.market_code}' already exists")
+            raise ValueError(
+                f"Mandi with market code '{mandi_data.market_code}' already exists")
         except Exception:
             self.db.rollback()
             raise

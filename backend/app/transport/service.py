@@ -3,6 +3,14 @@ Transport cost calculation service.
 
 Refactored to functional style for direct testing and usage.
 """
+from app.transport.schemas import (
+    VehicleType,
+    TransportCompareRequest,
+    TransportCompareResponse,
+    MandiComparison,
+    CostBreakdown,
+)
+from app.models import Mandi, Commodity, PriceHistory
 import math
 import httpx
 import logging
@@ -11,14 +19,6 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from app.models import Mandi, Commodity, PriceHistory
-from app.transport.schemas import (
-    VehicleType,
-    TransportCompareRequest,
-    TransportCompareResponse,
-    MandiComparison,
-    CostBreakdown,
-)
 
 # =============================================================================
 # CONSTANTS (Updated with 2026 Indian Market Rates)
@@ -1026,6 +1026,7 @@ DISTRICT_COORDINATES = {
 # CORE LOGIC FUNCTIONS
 # =============================================================================
 
+
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate the great-circle distance between two points (km)."""
     R = 6371.0
@@ -1049,12 +1050,13 @@ _road_distance_cache: Dict[Tuple, float] = {}
 # along the flat NH544 coastal corridor (Thrissur, Ernakulam, Kottayam, etc.).
 # Using the hilly multiplier (1.6) overestimates distances significantly for these routes.
 _HILLY_STATES = {"Himachal Pradesh", "Uttarakhand", "Jammu and Kashmir",
-                  "Arunachal Pradesh", "Sikkim", "Meghalaya", "Nagaland", "Manipur",
-                  "Mizoram", "Tripura", "Assam", "Goa"}
+                 "Arunachal Pradesh", "Sikkim", "Meghalaya", "Nagaland", "Manipur",
+                 "Mizoram", "Tripura", "Assam", "Goa"}
 
 # Kerala has mixed terrain (flat coast + inland Ghats). Use an intermediate multiplier.
 _SEMI_HILLY_STATES = {"Kerala", "Tamil Nadu", "Karnataka", "Andhra Pradesh",
-                       "Telangana", "Maharashtra", "Odisha", "West Bengal"}
+                      "Telangana", "Maharashtra", "Odisha", "West Bengal"}
+
 
 def _fallback_multiplier(source_state: str = "", dest_state: str = "") -> float:
     """Return a terrain-aware Haversine→road multiplier when OSRM is unavailable."""
@@ -1070,6 +1072,7 @@ def _fallback_multiplier(source_state: str = "", dest_state: str = "") -> float:
         return 1.30  # semi-hilly (e.g. Kerala coast, peninsular states)
     return 1.25      # flat terrain (plains)
 
+
 def get_road_distance(
     lat1: float, lon1: float,
     lat2: float, lon2: float,
@@ -1077,38 +1080,22 @@ def get_road_distance(
     dest_state: str = "",
 ) -> float:
     """
-    Return accurate road distance (km) using OSRM public routing API.
-    Falls back to Haversine × terrain multiplier on failure.
+    Return estimated road distance (km) using Haversine × terrain multiplier.
+    Fully local — no external API calls — so the transport compare endpoint
+    stays fast even with 40 candidate mandis.
     Results are cached in-process.
     """
-    cache_key = (round(lat1, 4), round(lon1, 4), round(lat2, 4), round(lon2, 4))
+    cache_key = (round(lat1, 4), round(lon1, 4),
+                 round(lat2, 4), round(lon2, 4))
     if cache_key in _road_distance_cache:
         return _road_distance_cache[cache_key]
 
     haversine_km = haversine_distance(lat1, lon1, lat2, lon2)
-
-    try:
-        url = (
-            f"http://router.project-osrm.org/route/v1/driving/"
-            f"{lon1},{lat1};{lon2},{lat2}"
-            f"?overview=false&steps=false"
-        )
-        with httpx.Client(timeout=8.0) as client:
-            resp = client.get(url)
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("code") == "Ok" and data.get("routes"):
-                road_km = data["routes"][0]["distance"] / 1000.0
-                _road_distance_cache[cache_key] = road_km
-                return road_km
-    except Exception as e:
-        logger.debug("OSRM unavailable, using fallback: %s", e)
-
-    # Fallback
     multiplier = _fallback_multiplier(source_state, dest_state)
     road_km = haversine_km * multiplier
     _road_distance_cache[cache_key] = road_km
     return road_km
+
 
 def select_vehicle(quantity_kg: float) -> VehicleType:
     """Select appropriate vehicle based on quantity."""
@@ -1119,10 +1106,12 @@ def select_vehicle(quantity_kg: float) -> VehicleType:
     else:
         return VehicleType.TRUCK_LARGE
 
+
 def calculate_transport_cost(distance_km: float, vehicle_type: VehicleType) -> float:
     """Calculate basic transport cost for one trip (distance * rate)."""
     cost_per_km = VEHICLES[vehicle_type]["cost_per_km"]
     return distance_km * cost_per_km
+
 
 def calculate_net_profit(
     price_per_kg: float,
@@ -1160,7 +1149,8 @@ def calculate_net_profit(
     commission = gross_revenue * COMMISSION_RATE
 
     # 5. Additional Charges (per trip)
-    additional_cost = (WEIGHBRIDGE_FEE + PARKING_FEE + DOCUMENTATION_FEE) * trips
+    additional_cost = (WEIGHBRIDGE_FEE + PARKING_FEE +
+                       DOCUMENTATION_FEE) * trips
 
     # Total Cost
     total_cost = (total_transport_cost + total_toll_cost + loading_cost +
@@ -1191,6 +1181,7 @@ def calculate_net_profit(
 # =============================================================================
 # DATA ACCESS & INTEGRATION
 # =============================================================================
+
 
 def get_mandis_for_commodity(commodity_id: str, db: Session, limit: int = 100) -> List[Dict[str, Any]]:
     """
@@ -1385,7 +1376,8 @@ def compare_mandis(request: TransportCompareRequest, db: Session = None) -> List
     for m in raw_mandis:
         if not m.get("latitude") or not m.get("longitude") or m.get("price_per_kg") is None:
             continue
-        straight_km = haversine_distance(source_lat, source_lon, m["latitude"], m["longitude"])
+        straight_km = haversine_distance(
+            source_lat, source_lon, m["latitude"], m["longitude"])
         # Pre-filter: if max_distance set, skip mandis beyond it even in straight line
         if request.max_distance_km and straight_km > request.max_distance_km:
             continue

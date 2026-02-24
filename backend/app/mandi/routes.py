@@ -61,7 +61,9 @@ async def create_mandi(
         mandi = service.create(mandi_data)
         return mandi
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 @router.get(
     "/",
@@ -75,7 +77,8 @@ async def list_mandis(
     db: Session = Depends(get_db),
     skip: int = Query(default=0, ge=0, description="Records to skip"),
     limit: int = Query(default=100, ge=1, le=100, description="Max records"),
-    district: str | None = Query(default=None, description="Filter by district name"),
+    district: str | None = Query(
+        default=None, description="Filter by district name"),
 ) -> list[MandiResponse]:
     """
     List mandis with optional filtering.
@@ -108,24 +111,25 @@ async def list_mandis(
 async def get_mandi_prices(
     mandi_id: UUID,
     db: Session = Depends(get_db),
-    limit: int = Query(default=100, ge=1, le=500, description="Max commodities to return"),
+    limit: int = Query(default=100, ge=1, le=500,
+                       description="Max commodities to return"),
 ) -> list[dict]:
     """
     Get current prices for all commodities at a mandi.
-    
+
     Returns the latest price record for each commodity traded at this mandi.
-    
+
     Args:
         mandi_id: Mandi UUID
         db: Database session
         limit: Maximum number of prices to return
-    
+
     Returns:
         List of commodity prices with details
     """
     from app.models import PriceHistory, Commodity
     from sqlalchemy import func
-    
+
     # Verify mandi exists
     service = MandiService(db)
     mandi = service.get_by_id(mandi_id)
@@ -134,7 +138,7 @@ async def get_mandi_prices(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Mandi not found"
         )
-    
+
     # Get latest price for each commodity at this mandi
     # Using a subquery to get the max date for each commodity
     subquery = (
@@ -146,7 +150,7 @@ async def get_mandi_prices(
         .group_by(PriceHistory.commodity_id)
         .subquery()
     )
-    
+
     prices = (
         db.query(PriceHistory, Commodity)
         .join(Commodity, PriceHistory.commodity_id == Commodity.id)
@@ -159,13 +163,13 @@ async def get_mandi_prices(
         .limit(limit)
         .all()
     )
-    
+
     if not prices:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No price data available for this mandi"
         )
-    
+
     # Format response
     return [
         {
@@ -223,22 +227,32 @@ async def list_districts(
 async def list_mandis_with_filters(
     db: Session = Depends(get_db),
     skip: int = Query(default=0, ge=0, description="Records to skip"),
-    limit: int = Query(default=50, ge=1, le=2000, description="Max records"),
+    limit: int = Query(default=20, ge=1, le=200, description="Max records"),
     search: str | None = Query(default=None, description="Search term"),
-    states: str | None = Query(default=None, description="Comma-separated states"),
+    states: str | None = Query(
+        default=None, description="Comma-separated states"),
     district: str | None = Query(default=None, description="District filter"),
-    commodity: str | None = Query(default=None, description="Filter by commodity accepted"),
-    max_distance_km: float | None = Query(default=None, description="Max distance from user"),
+    commodity: str | None = Query(
+        default=None, description="Filter by commodity accepted"),
+    max_distance_km: float | None = Query(
+        default=None, description="Max distance from user"),
     user_lat: float | None = Query(default=None, description="User latitude"),
     user_lon: float | None = Query(default=None, description="User longitude"),
-    user_district: str | None = Query(default=None, description="User's district"),
+    user_district: str | None = Query(
+        default=None, description="User's district"),
     user_state: str | None = Query(default=None, description="User's state"),
-    has_facility: str | None = Query(default=None, description="Facility: weighbridge, storage, loading_dock, cold_storage"),
-    min_rating: float | None = Query(default=None, description="Minimum rating"),
-    sort_by: str = Query(default="name", description="Sort by: name, distance, rating"),
-    sort_order: str = Query(default="asc", description="Sort order: asc, desc"),
+    has_facility: str | None = Query(
+        default=None, description="Facility: weighbridge, storage, loading_dock, cold_storage"),
+    min_rating: float | None = Query(
+        default=None, description="Minimum rating"),
+    sort_by: str = Query(
+        default="name", description="Sort by: name, distance, rating"),
+    sort_order: str = Query(
+        default="asc", description="Sort order: asc, desc"),
 ) -> dict:
     """Get mandis with advanced filtering and distance from user."""
+    from sqlalchemy import text
+    db.execute(text("SET LOCAL statement_timeout = '15s'"))
     service = MandiService(db)
     state_list = states.split(",") if states else None
     return service.get_all_with_filters(
@@ -291,7 +305,8 @@ async def get_mandi(
     service = MandiService(db)
     mandi = service.get_by_id(mandi_id)
     if not mandi:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
     return mandi
 
 
@@ -303,22 +318,26 @@ async def get_mandi(
 )
 async def get_mandi_details(
     mandi_id: UUID,
-    user_lat: float | None = Query(default=None, description="User latitude for distance"),
-    user_lon: float | None = Query(default=None, description="User longitude for distance"),
-    user_district: str | None = Query(default=None, description="User's district"),
+    user_lat: float | None = Query(
+        default=None, description="User latitude for distance"),
+    user_lon: float | None = Query(
+        default=None, description="User longitude for distance"),
+    user_district: str | None = Query(
+        default=None, description="User's district"),
     user_state: str | None = Query(default=None, description="User's state"),
     db: Session = Depends(get_db),
 ) -> dict:
     """Get detailed mandi information with prices."""
     service = MandiService(db)
-    
+
     # If user_district and user_state are provided but no coordinates, geocode them
     if user_district and user_state and not (user_lat and user_lon):
         from app.core.geocoding import geocoding_service
-        coords = geocoding_service.get_district_coordinates(user_district, user_state)
+        coords = geocoding_service.get_district_coordinates(
+            user_district, user_state)
         if coords:
             user_lat, user_lon = coords
-    
+
     details = service.get_details(mandi_id, user_lat, user_lon)
     if not details:
         raise HTTPException(
@@ -364,7 +383,8 @@ async def compare_mandis(
     responses={200: {"description": "Search results"}},
 )
 async def search_mandis(
-    q: str = Query(..., min_length=1, max_length=100, description="Search query"),
+    q: str = Query(..., min_length=1, max_length=100,
+                   description="Search query"),
     limit: int = Query(default=10, ge=1, le=50, description="Max results"),
     db: Session = Depends(get_db),
 ) -> list[MandiResponse]:
@@ -415,7 +435,8 @@ async def get_mandi_by_code(
     service = MandiService(db)
     mandi = service.get_by_market_code(market_code)
     if not mandi:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
     return mandi
 
 
@@ -465,10 +486,12 @@ async def update_mandi(
     try:
         mandi = service.update(mandi_id, mandi_data)
         if not mandi:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
         return mandi
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete(
@@ -502,4 +525,5 @@ async def delete_mandi(
     service = MandiService(db)
     deleted = service.delete(mandi_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mandi not found")
