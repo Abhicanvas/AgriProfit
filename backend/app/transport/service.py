@@ -376,7 +376,7 @@ def compare_mandis(
     if not commodity:
         raise ValueError(f"Commodity '{request.commodity}' not found")
 
-    # Fetch mandis with recent price data (more than limit, we'll trim later)
+    # Fetch mandis with recent price data
     raw_mandis = get_mandis_for_commodity(
         str(commodity.id), db, limit=200
     )
@@ -394,13 +394,23 @@ def compare_mandis(
     capacity = VEHICLES[vehicle_type]["capacity_kg"]
     trips = math.ceil(request.quantity_kg / capacity)
 
+    # Pre-filter: use cheap haversine to narrow to the top candidates before
+    # making OSRM HTTP calls. This bounds OSRM calls to at most osrm_candidate_limit
+    # regardless of how many mandis exist for the commodity.
+    osrm_candidate_limit = max(request.limit * 3, 30)
+    eligible = [
+        m for m in raw_mandis
+        if m.get("latitude") and m.get("longitude") and m.get("price_per_kg") is not None
+    ]
+    # Sort candidates by price descending (higher price = more likely profitable)
+    # then trim so we only call OSRM for a bounded set
+    eligible.sort(key=lambda m: m["price_per_kg"], reverse=True)
+    candidates = eligible[:osrm_candidate_limit]
+
     raw_comparisons: list[MandiComparison] = []
     has_estimated = False
 
-    for m in raw_mandis:
-        if not m.get("latitude") or not m.get("longitude") or m.get("price_per_kg") is None:
-            continue
-
+    for m in candidates:
         road_dist, dist_source = routing_service.get_distance_km(
             source_lat, source_lon, m["latitude"], m["longitude"], db
         )

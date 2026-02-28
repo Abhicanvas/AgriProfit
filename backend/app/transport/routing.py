@@ -103,7 +103,7 @@ class RoutingService:
         url = f"{settings.osrm_base_url}/{lon1},{lat1};{lon2},{lat2}"
         params = {"overview": "false", "alternatives": "false", "steps": "false"}
         try:
-            r = httpx.get(url, params=params, timeout=3.0)
+            r = httpx.get(url, params=params, timeout=1.5)
             if r.status_code != 200:
                 return None
             data = r.json()
