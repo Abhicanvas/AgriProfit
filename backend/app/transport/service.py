@@ -407,13 +407,29 @@ def compare_mandis(
     eligible.sort(key=lambda m: m["price_per_kg"], reverse=True)
     candidates = eligible[:osrm_candidate_limit]
 
+    # Fetch all OSRM distances in parallel — 30 candidates at ~1.5s each would be
+    # 45s sequential; parallel with 10 workers brings it to ceil(30/10)*1.5s ≈ 5s.
+    # DB cache hits return instantly, so warm requests are near-zero cost.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _fetch_distance(m: dict) -> tuple[dict, float, str]:
+        dist, src = routing_service.get_distance_km(
+            source_lat, source_lon, m["latitude"], m["longitude"], db
+        )
+        return m, dist, src
+
+    distances: dict[str, tuple[float, str]] = {}  # mandi name → (km, source)
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_distance, m): m for m in candidates}
+        for future in as_completed(futures):
+            m, road_dist, dist_source = future.result()
+            distances[m["name"]] = (road_dist, dist_source)
+
     raw_comparisons: list[MandiComparison] = []
     has_estimated = False
 
     for m in candidates:
-        road_dist, dist_source = routing_service.get_distance_km(
-            source_lat, source_lon, m["latitude"], m["longitude"], db
-        )
+        road_dist, dist_source = distances[m["name"]]
         if dist_source == "estimated":
             has_estimated = True
 
