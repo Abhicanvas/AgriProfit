@@ -12,6 +12,7 @@ from .sale import Sale
 from .uploaded_file import UploadedFile
 from .refresh_token import RefreshToken
 from .login_attempt import LoginAttempt
+from .road_distance_cache import RoadDistanceCache
 
 __all__ = [
     "User",
@@ -30,4 +31,5 @@ __all__ = [
     "UploadedFile",
     "RefreshToken",
     "LoginAttempt",
+    "RoadDistanceCache",
 ]
