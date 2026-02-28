@@ -222,6 +222,19 @@ class MandiComparison(BaseModel):
         json_schema_extra={"example": "recommended"}
     )
 
+    verdict: str = Field(
+        default="not_viable",
+        description="Sell verdict: excellent / good / marginal / not_viable",
+    )
+    verdict_reason: str = Field(
+        default="",
+        description="Human-readable explanation of the verdict",
+    )
+    distance_source: str = Field(
+        default="estimated",
+        description="Distance data source: 'osrm' (accurate) or 'estimated' (haversine fallback)",
+    )
+
     model_config = ConfigDict(
         from_attributes=True
     )
@@ -251,6 +264,11 @@ class TransportCompareResponse(BaseModel):
     total_mandis_analyzed: int = Field(
         ...,
         description="Total number of mandis considered"
+    )
+
+    distance_note: str | None = Field(
+        default=None,
+        description="Set when any distance used the haversine fallback instead of live routing data",
     )
 
     model_config = ConfigDict(
