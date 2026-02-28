@@ -11,20 +11,16 @@
 4. price_analytics.py + tests (8 tests passing)
 5. risk_engine.py + tests (14 tests passing)
 6. schemas.py extended (StressTestResult, 15 new MandiComparison fields, 8 new CostBreakdown fields)
+7. service.py rewritten — real freight + spoilage + risk + audit logging (24 tests passing)
+8. routes.py — travel time updated to /42*2
 
-## Remaining Tasks
-7. **service.py** — rewrite orchestrator (MAIN TASK — see plan Task 7)
-   - Add imports: economics, spoilage, price_analytics, risk_engine, json, logging
-   - Update select_vehicle() to use 90% practical capacity thresholds
-   - Rewrite calculate_net_profit() to use real freight + spoilage
-   - Rewrite compare_mandis() to integrate all new modules + audit logging
-   - Fix existing TestCalculateNetProfit tests (values will change with real model)
+## All Tests Passing ✓
+- 86 transport tests: 100% pass
+- All modules: economics, spoilage, price_analytics, risk_engine, service, routing, API
 
-8. routes.py — change estimated_time_hours from /50 to /42*2
-
-9. Full test suite run — python -m pytest --tb=short -q
-
-10. Memory update
+## Remaining (optional cleanup)
+- Memory update in MEMORY.md (done below)
+- Merge feature/logistics-engine to main via PR
 
 ## Key Files
 - backend/app/transport/economics.py (NEW — FreightResult, compute_freight)
@@ -32,11 +28,8 @@
 - backend/app/transport/price_analytics.py (NEW — PriceAnalytics, compute_price_analytics)
 - backend/app/transport/risk_engine.py (NEW — compute_risk_score, run_stress_test, apply_behavioral_corrections, check_guardrails)
 - backend/app/transport/schemas.py (MODIFIED — StressTestResult added, MandiComparison+CostBreakdown extended)
-- backend/app/transport/service.py (NEXT — orchestrator rewrite)
+- backend/app/transport/service.py (REWRITTEN — orchestrator integrating all modules)
+- backend/app/transport/routes.py (MODIFIED — travel time fix)
 
-## Worked Example (for verification)
+## Worked Example (verified)
 truck_small, 292km intrastate Punjab, 5500kg, diesel ₹98 → total_freight ≈ ₹23,581
-
-## How to Resume
-Start a new Claude Code session, read this file, read the plan (Task 7+), and continue.
-All 4 sub-modules are done. The only remaining core work is service.py rewrite.
