@@ -13,6 +13,7 @@ import uuid
 from typing import Callable
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
@@ -311,8 +312,13 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
                 }
             )
 
-            # Re-raise to let FastAPI handle the response
-            raise
+            # Return a proper JSON 500 response instead of re-raising.
+            # Re-raising would propagate the exception past CORSMiddleware's `send`
+            # wrapper, causing CORS headers to be absent on error responses.
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error"},
+            )
 
 
 # =============================================================================

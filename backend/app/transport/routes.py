@@ -165,7 +165,7 @@ Results are sorted by net profit (highest first).
         },
     },
 )
-async def compare_transport_options(
+def compare_transport_options(
     request: TransportCompareRequest,
     db: Session = Depends(get_db),
 ) -> TransportCompareResponse:

@@ -4,11 +4,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class InventoryBase(BaseModel):
     commodity_id: UUID
-    quantity: float = Field(..., gt=0, description="Quantity of the commodity")
+    quantity: float = Field(..., description="Quantity of the commodity")
     unit: str = Field(..., min_length=1, max_length=20, description="Unit of measurement (e.g., kg, ton)")
 
 class InventoryCreate(InventoryBase):
-    pass
+    # Enforce gt=0 only on write — DB records may legitimately be 0 after reads
+    quantity: float = Field(..., gt=0, description="Quantity of the commodity")
 
 class InventoryUpdate(BaseModel):
     quantity: float | None = Field(None, gt=0)

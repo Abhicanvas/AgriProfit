@@ -49,16 +49,15 @@ class SalesService:
             if remaining_to_deduct <= 0:
                 break
             
-            if item.quantity >= remaining_to_deduct:
+            if item.quantity > remaining_to_deduct:
                 # Deduct partial quantity from this item
                 item.quantity -= remaining_to_deduct
                 self.db.add(item)  # Explicitly add to session for tracking
                 remaining_to_deduct = 0
             else:
-                # Use entire item quantity
+                # Use entire item quantity and remove the exhausted inventory record
                 remaining_to_deduct -= item.quantity
-                item.quantity = 0
-                self.db.add(item)  # Explicitly add to session for tracking
+                self.db.delete(item)
 
         # Note: We allow generating sales even if inventory is insufficient (flexible system),
         # but we still deduct what we can from available inventory.

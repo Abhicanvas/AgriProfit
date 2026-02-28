@@ -304,15 +304,6 @@ async def add_no_cache_headers(request: Request, call_next):
         response.headers["Expires"] = "0"
     return response
 
-# CORS middleware (should be outermost for preflight requests)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
-)
-
 # Error logging middleware (catch unhandled exceptions)
 app.add_middleware(ErrorLoggingMiddleware)
 
@@ -321,6 +312,17 @@ app.add_middleware(SecurityMonitoringMiddleware)
 
 # Request logging middleware (log all requests with timing)
 app.add_middleware(RequestLoggingMiddleware)
+
+# CORS middleware must be added LAST so it becomes the outermost user middleware.
+# This ensures its `send` wrapper injects Access-Control-Allow-Origin headers into
+# ALL responses including 4xx/5xx errors, which is required by the browser.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
+)
 
 
 # =============================================================================
