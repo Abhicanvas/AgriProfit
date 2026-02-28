@@ -693,6 +693,7 @@ export default function TransportPage() {
                                                 <TableHead className="text-right">Price/quintal</TableHead>
                                                 <TableHead className="text-right">Transport Cost</TableHead>
                                                 <TableHead>Vehicle</TableHead>
+                                                <TableHead>Verdict</TableHead>
                                                 <TableHead>Est. Time</TableHead>
                                                 <TableHead className="text-right">ROI</TableHead>
                                                 <TableHead className="text-right">Net Profit</TableHead>
@@ -710,6 +711,14 @@ export default function TransportPage() {
                                                     <TableCell className="text-right">₹{(r.price_per_kg * 100).toFixed(2)}</TableCell>
                                                     <TableCell className="text-right text-red-600">₹{r.costs.total.toLocaleString()}</TableCell>
                                                     <TableCell><Badge variant="outline">{VEHICLE_LABELS[r.vehicle_type] || r.vehicle_type}</Badge></TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-xs ${VERDICT_CONFIG[r.verdict]?.className ?? ""}`}
+                                                        >
+                                                            {VERDICT_CONFIG[r.verdict]?.label ?? r.verdict}
+                                                        </Badge>
+                                                    </TableCell>
                                                     <TableCell className="text-muted-foreground">{r.arrival_time}</TableCell>
                                                     <TableCell className="text-right">
                                                         <Badge variant={r.roi_percentage > 500 ? "default" : r.roi_percentage > 300 ? "secondary" : "outline"}>

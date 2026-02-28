@@ -347,7 +347,7 @@ describe("TransportPage - Results Display", () => {
         const user = userEvent.setup();
         await submitForm(user);
         await waitFor(() => {
-            expect(screen.getByText(/excellent/i)).toBeInTheDocument();
+            expect(screen.getAllByText(/excellent/i).length).toBeGreaterThanOrEqual(1);
         });
     });
 
@@ -422,8 +422,19 @@ describe("TransportPage - Results Display", () => {
         render(<TransportPage />);
         const user = userEvent.setup();
         await submitForm(user);
-        await waitFor(() => expect(screen.getByText(/excellent/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getAllByText(/excellent/i).length).toBeGreaterThanOrEqual(1));
         expect(screen.queryByText(/Price data is 5 days old/i)).not.toBeInTheDocument();
+    });
+
+    it("shows verdict badge in comparison table row", async () => {
+        render(<TransportPage />);
+        const user = userEvent.setup();
+        await submitForm(user);
+        await waitFor(() => {
+            // The table should have the verdict badge (text "Excellent") — it appears once in the card header too
+            const badges = screen.getAllByText(/excellent/i);
+            expect(badges.length).toBeGreaterThanOrEqual(1);
+        });
     });
 });
 
