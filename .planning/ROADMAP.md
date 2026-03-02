@@ -98,12 +98,12 @@ Plans:
   2. The block's deficiency profile maps to a ranked list of 3-5 suitable crops using ICAR NPK/pH threshold rules, with market demand (HIGH/MEDIUM/LOW from seasonal calendar) shown alongside each crop
   3. Every recommendation screen displays "Block-average soil data for [block name] — not a field-level measurement" as a non-dismissable disclaimer
   4. Fertiliser advice is generated per nutrient deficiency: for any nutrient where the low% distribution exceeds a threshold, the UI shows an explicit advice card (e.g. "73% of soils in this block are nitrogen-deficient — consider urea application before planting")
-  5. The soil advisor page is labelled "Available for 31 states" and states with no soil coverage are clearly marked as unavailable — a user selecting an uncovered region sees an informative message, not an empty result or an error
+  5. The soil advisor page is labelled "Available for 21 states" and states with no soil coverage are clearly marked as unavailable — a user selecting an uncovered region sees an informative message, not an empty result or an error
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Soil suitability seeding script (seed_soil_suitability.py, ICAR thresholds, soil_crop_suitability table, Alembic migration)
-- [ ] 05-02: FastAPI soil advisor endpoint + Next.js crop advisor UI
+- [ ] 05-01-PLAN.md — Alembic migration (soil_profiles + soil_crop_suitability tables), suitability.py + fertiliser.py pure functions (TDD), seed_soil_suitability.py bulk seeder
+- [ ] 05-02-PLAN.md — FastAPI soil advisor endpoints (states/districts/blocks/profile) + Next.js drill-down UI with disclaimer, distribution bars, crop list, fertiliser advice cards
 
 ### Phase 6: Mandi Arbitrage Dashboard
 **Goal**: A farmer can select a commodity and their origin district and see the top 3 destination mandis ranked by net profit after freight and spoilage — using only price data fresher than 7 days, with stale data flagged rather than displayed as current.
