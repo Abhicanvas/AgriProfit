@@ -31,11 +31,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Price-to-soil district join covers all 31 states with soil data, verifiable by querying matched block records per state
   4. Every price series has winsorisation bounds stored in a `price_bounds` table; outlier rows with CV > 500% are flagged and capped, not silently included in downstream computation
   5. A spot-check of 20 manually selected district matches (covering Hindi/English name variants) confirms correct state-scoped assignment before Phase 2 begins
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: District harmonisation script (RapidFuzz state-scoped matching, district_name_map table, Alembic migration)
-- [ ] 01-02: Price cleaning pipeline (winsorisation per commodity, price_bounds table, outlier flagging)
+- [ ] 01-01-PLAN.md — District harmonisation (RapidFuzz state-scoped matching, district_name_map table, Alembic migration, ml module scaffold)
+- [ ] 01-02-PLAN.md — Price cleaning pipeline (per-commodity IQR winsorisation, price_bounds table, outlier flagging)
 
 ### Phase 2: Seasonal Price Calendar
 **Goal**: A farmer can select any commodity and state and see a monthly sell-window chart built from 10 years of price history, with best and worst months clearly labelled.
