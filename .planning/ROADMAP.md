@@ -34,9 +34,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — District harmonisation (RapidFuzz state-scoped matching, district_name_map table, Alembic migration, ml module scaffold)
-- [ ] 01-02-PLAN.md — Price cleaning pipeline (per-commodity IQR winsorisation, price_bounds table, outlier flagging)
-- [ ] 01-03-PLAN.md — Gap closure: correct HARM-04 soil state count from 31 to 21 in REQUIREMENTS.md and ROADMAP.md
+- [x] 01-01-PLAN.md — District harmonisation (RapidFuzz state-scoped matching, district_name_map table, Alembic migration, ml module scaffold)
+- [x] 01-02-PLAN.md — Price cleaning pipeline (per-commodity IQR winsorisation, price_bounds table, outlier flagging)
+- [x] 01-03-PLAN.md — Gap closure: correct HARM-04 soil state count from 31 to 21 in REQUIREMENTS.md and ROADMAP.md
 
 ### Phase 2: Seasonal Price Calendar
 **Goal**: A farmer can select any commodity and state and see a monthly sell-window chart built from 10 years of price history, with best and worst months clearly labelled.
@@ -124,7 +124,7 @@ Phases 1, 2, 3 execute sequentially. Phase 4 depends on Phase 3. Phases 5 and 6 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. District Harmonisation + Price Cleaning | 2/2 | Complete   | 2026-03-02 |
+| 1. District Harmonisation + Price Cleaning | 3/3 | Complete   | 2026-03-02 |
 | 2. Seasonal Price Calendar | 0/2 | Not started | - |
 | 3. Feature Engineering Foundation | 0/2 | Not started | - |
 | 4. XGBoost Forecasting + Serving | 0/3 | Not started | - |
