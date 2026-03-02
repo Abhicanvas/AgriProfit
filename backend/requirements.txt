@@ -57,6 +57,6 @@ uvicorn==0.40.0
 APScheduler==3.10.4
 wrapt==2.0.1
 pandas==2.2.3
-pyarrow==19.0.0
+pyarrow==17.0.0
 rapidfuzz==3.14.3
 scipy==1.17.0
