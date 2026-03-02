@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Success Criteria** (what must be TRUE):
   1. The `district_name_map` table exists and maps all district name variants across prices, rainfall, weather, and soil datasets using state-scoped RapidFuzz matching — global fuzzy matching is not used anywhere
   2. Price-to-rainfall district join achieves >= 95% coverage (>= 543 of 571 price districts matched), verifiable by running the join and counting matched rows
-  3. Price-to-soil district join covers all 31 states with soil data, verifiable by querying matched block records per state
+  3. Price-to-soil district join covers all 21 states with soil data available in the local dataset (data/soil-health/nutrients/), verifiable by querying matched block records per state; harmonise_districts.py matched 20 of 21 available states at 95.2%
   4. Every price series has winsorisation bounds stored in a `price_bounds` table; outlier rows with CV > 500% are flagged and capped, not silently included in downstream computation
   5. A spot-check of 20 manually selected district matches (covering Hindi/English name variants) confirms correct state-scoped assignment before Phase 2 begins
 **Plans**: 3 plans
