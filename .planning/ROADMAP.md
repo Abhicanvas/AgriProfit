@@ -12,7 +12,8 @@ This milestone adds a machine learning intelligence layer to the existing AgriPr
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: District Harmonisation + Price Cleaning** - Build the cross-dataset join foundation that gates all ML features (completed 2026-03-02)
+- [x] **Phase 1: District Harmonisation + Price Cleaning** - Build the cross-dataset join foundation that gates all ML features
+ (completed 2026-03-02)
 - [ ] **Phase 2: Seasonal Price Calendar** - Deliver the first farmer-facing feature via pure SQL aggregation
 - [ ] **Phase 3: Feature Engineering Foundation** - Build and unit-test all shared feature functions before any model training
 - [ ] **Phase 4: XGBoost Forecasting + Serving** - Train, validate, cache, and serve the price forecasting baseline
@@ -48,11 +49,11 @@ Plans:
   3. Commodities or states with fewer than 3 years of monthly data display a visible low-confidence warning in the UI, not a chart that looks identical to high-confidence data
   4. The `seasonal_price_stats` table is populated by a training script that reads from the price parquet, not from live DB queries, and the endpoint reads only from that pre-aggregated table
   5. Known seasonal patterns are spot-checked before release: onion peaks Oct-Nov, tomato peaks Jul in West Bengal or Feb-Mar in Karnataka — a mismatch signals a data quality problem, not a model problem
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Seasonal aggregation script + seasonal_price_stats table (Alembic migration, train_seasonal.py)
-- [ ] 02-02: FastAPI seasonal endpoint + Next.js calendar dashboard
+- [ ] 02-01-PLAN.md — Alembic migration for seasonal_price_stats, pure aggregator module (TDD), train_seasonal.py offline pipeline
+- [ ] 02-02-PLAN.md — FastAPI seasonal endpoint + Pydantic schemas + Next.js calendar dashboard with Recharts IQR chart
 
 ### Phase 3: Feature Engineering Foundation
 **Goal**: All shared feature functions (price lags, rolling stats, rainfall deficit, weather, soil) exist as pure Python with unit tests and enforced cutoff_date parameters, with no look-ahead leakage possible.
