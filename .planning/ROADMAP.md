@@ -123,7 +123,7 @@ Phases 1, 2, 3 execute sequentially. Phase 4 depends on Phase 3. Phases 5 and 6 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. District Harmonisation + Price Cleaning | 0/2 | Not started | - |
+| 1. District Harmonisation + Price Cleaning | 1/2 | In Progress|  |
 | 2. Seasonal Price Calendar | 0/2 | Not started | - |
 | 3. Feature Engineering Foundation | 0/2 | Not started | - |
 | 4. XGBoost Forecasting + Serving | 0/3 | Not started | - |

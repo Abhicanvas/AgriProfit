@@ -7,10 +7,10 @@
 
 ### Data Harmonisation
 
-- [ ] **HARM-01**: System has a `district_name_map` table mapping all district name variants across the 4 datasets (prices, rainfall, weather, soil) with state-scoped fuzzy matching
+- [x] **HARM-01**: System has a `district_name_map` table mapping all district name variants across the 4 datasets (prices, rainfall, weather, soil) with state-scoped fuzzy matching
 - [ ] **HARM-02**: Price data is winsorised per commodity — corrupt outlier rows (CV > 500%) are flagged and capped before any feature or model computation
-- [ ] **HARM-03**: Every price record can be joined to its rainfall district equivalent with >= 95% coverage (matching the 543/571 confirmed pairs)
-- [ ] **HARM-04**: Every price record can be joined to its soil block equivalent for the 31 states with soil coverage
+- [x] **HARM-03**: Every price record can be joined to its rainfall district equivalent with >= 95% coverage (matching the 543/571 confirmed pairs)
+- [x] **HARM-04**: Every price record can be joined to its soil block equivalent for the 31 states with soil coverage
 
 ### Seasonal Price Calendar
 
@@ -96,10 +96,10 @@
 
 | Requirement | Phase | Status |
 |---|---|---|
-| HARM-01 | Phase 1 | Pending |
+| HARM-01 | Phase 1 | Complete |
 | HARM-02 | Phase 1 | Pending |
-| HARM-03 | Phase 1 | Pending |
-| HARM-04 | Phase 1 | Pending |
+| HARM-03 | Phase 1 | Complete |
+| HARM-04 | Phase 1 | Complete |
 | SEAS-01 | Phase 2 | Pending |
 | SEAS-02 | Phase 2 | Pending |
 | SEAS-03 | Phase 2 | Pending |

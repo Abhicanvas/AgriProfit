@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+last_updated: "2026-03-02T11:43:03.977Z"
+progress:
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
+---
+
 # Project State
 
 ## Project Reference
@@ -10,27 +23,27 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 1 of 6 (District Harmonisation + Price Cleaning)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-01 — Roadmap created; 6-phase ML intelligence milestone defined
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-02 — Plan 01-01 complete: district_name_map table seeded, 557/571 price districts joinable to rainfall (97.5%)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 8%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 17 min
+- Total execution time: 0.28 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| Phase 01 | 1/2 | 17 min | 17 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 17 min (01-01)
 - Trend: -
 
 *Updated after each plan completion*
@@ -47,6 +60,10 @@ Recent decisions affecting current work:
 - [Roadmap]: Phases 5 and 6 are independent of each other and can run in parallel after Phase 4 completes
 - [Roadmap]: Soil advisor is rule-based ICAR lookup, not a live ML model — precomputed suitability scores, never field-level claims
 - [Roadmap]: Arbitrage threshold (10% net margin) is a configurable parameter, not a hardcoded constant
+- [Phase 01]: pyarrow 17.0.0 used instead of 19.0.0: price parquet incompatible with pyarrow 19 (Repetition level histogram size mismatch)
+- [Phase 01]: rapidfuzz_utils.default_process processor required for district matching: WRatio without processor gives ~20/100 for case-mismatched district names (BANKA vs Banka)
+- [Phase 01]: Weather data matched globally (no state column): weather CSV has district column only; global matching with state assigned from canonical match
+- [Phase 01]: Coverage metric is price-district-centric: 557/571 price districts have rainfall match (97.5%) vs 90.7% from rainfall perspective
 
 ### Pending Todos
 
@@ -60,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Roadmap created — ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written
+Last session: 2026-03-02
+Stopped at: Completed 01-01-PLAN.md (district harmonisation foundation — district_name_map seeded, 97.5% rainfall coverage)
 Resume file: None
