@@ -8,7 +8,7 @@ progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 16
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** A farmer in any district can ask "what should I grow and when should I sell it?" and get a data-backed answer.
-**Current focus:** Phase 6 — Mandi Arbitrage Dashboard — IN PROGRESS (Plan 02 tasks 1+2 complete; Task 3 checkpoint awaiting human verification)
+**Current focus:** Phase 6 — Mandi Arbitrage Dashboard — COMPLETE (all 2 plans done; Phase 2 Seasonal Calendar and Phase 4 XGBoost Forecasting remain)
 
 ## Current Position
 
-Phase: 6 of 6 (Mandi Arbitrage Dashboard) — IN PROGRESS
-Plan: 2 of 2 in current phase — AWAITING CHECKPOINT (Task 3: human-verify)
-Status: Phase 06 Plan 02 tasks 1+2 complete — ArbitragePage built, 5 Vitest tests pass GREEN, stale banner + empty states working
-Last activity: 2026-03-03 — Plan 06-02 tasks 1+2 complete: arbitrage frontend dashboard (2 commits: 25aebc8, 0cec7de)
+Phase: 6 of 6 (Mandi Arbitrage Dashboard) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 06 Plan 02 all 3 tasks complete — ArbitragePage built, 5 Vitest tests pass GREEN, human verification approved (Wheat/Ernakulam ARB-02 suppressed empty state confirmed)
+Last activity: 2026-03-03 — Plan 06-02 complete: arbitrage frontend dashboard (commits: 25aebc8, 0cec7de; human-verify approved)
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -51,7 +51,7 @@ Progress: [██████░░░░] 60%
 *Updated after each plan completion*
 | Phase 05 P02 | 11 | 2 tasks | 8 files |
 | Phase 06-mandi-arbitrage-dashboard P01 | 7 | 3 tasks | 10 files |
-| Phase 06-mandi-arbitrage-dashboard P02 | 5 | 2 tasks | 4 files |
+| Phase 06-mandi-arbitrage-dashboard P02 | 5 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -92,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase 06]: Arbitrage route handler is def (not async def) — OSRM blocks event loop, FastAPI runs sync handlers in thread pool
 - [Phase 06-mandi-arbitrage-dashboard]: Simple text inputs (not Select dropdowns) used for commodity and district on arbitrage page — keeps complexity low per plan spec
 - [Phase 06-mandi-arbitrage-dashboard]: VerdictBadge uses className colour overrides because shadcn Badge variant=default maps to primary colour not green
+- [Phase 06-mandi-arbitrage-dashboard]: enabled: submitted && !!commodity && !!district — TanStack Query fires only after form submit; setSubmitted(false) on input change forces fresh query on next submission
+- [Phase 06-mandi-arbitrage-dashboard]: Human verification confirmed ARB-02 suppressed empty state — Wheat/Ernakulam correctly shows "All 50 results were below the 10% net margin threshold" with no crash
 
 ### Pending Todos
 
@@ -106,5 +108,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 06 Plan 02 Task 3 — checkpoint:human-verify (ArbitragePage built, 5 tests GREEN, awaiting manual verification at http://localhost:3000/arbitrage)
+Stopped at: Phase 06 Plan 02 complete — all tasks done, human verification approved, SUMMARY.md written
 Resume file: None

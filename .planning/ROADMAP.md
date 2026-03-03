@@ -117,8 +117,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Backend arbitrage module (schemas, service, routes, config, main.py wiring, TDD)
-- [ ] 06-02-PLAN.md — Frontend arbitrage dashboard (service client, page, Vitest tests, human verification)
+- [x] 06-01-PLAN.md — Backend arbitrage module (schemas, service, routes, config, main.py wiring, TDD)
+- [x] 06-02-PLAN.md — Frontend arbitrage dashboard (service client, page, Vitest tests, human verification)
 
 ## Progress
 
