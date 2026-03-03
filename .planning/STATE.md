@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T07:36:47.538Z"
+last_updated: "2026-03-03T07:47:37.964Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 16
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** A farmer in any district can ask "what should I grow and when should I sell it?" and get a data-backed answer.
-**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Phase 2 complete; ready for Phase 4
+**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Plan 01 complete; Plans 02 and 03 ready (Wave 2)
 
 ## Current Position
 
-Phase: 4 of 6 (XGBoost Forecasting + Serving) — Not started
-Plan: 0 of 5 in current phase — READY
-Status: Phase 02 complete — seasonal calendar API + UI shipped and human-verified (commits: a54ed91, 27407ae)
-Last activity: 2026-03-03 — Plan 02-02 complete: FastAPI seasonal endpoint + Next.js calendar dashboard
+Phase: 4 of 6 (XGBoost Forecasting + Serving) — In Progress
+Plan: 1 of 5 in current phase — COMPLETE (Plan 02 next)
+Status: Phase 04 Plan 01 complete — ML schema (model_training_log + forecast_cache) + skforecast/xgboost installed (commits: db93859, ba66f51)
+Last activity: 2026-03-03 — Plan 04-01 complete: Alembic migrations, ORM models, ML dependencies
 
-Progress: [█████████░] 56% (9/16 plans)
+Progress: [█████████░] 63% (10/16 plans)
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [█████████░] 56% (9/16 plans)
 | Phase 06-mandi-arbitrage-dashboard P02 | 5 | 3 tasks | 4 files |
 | Phase 02-seasonal-price-calendar P01 | 15 | 3 tasks | 5 files |
 | Phase 02-seasonal-price-calendar P02 | 15 | 2 tasks | 5 files |
+| Phase 04-xgboost-forecasting-serving P01 | 10 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Recent decisions affecting current work:
 - [Phase 02-02]: Bonus /seasonal/commodities and /seasonal/states list endpoints added — drives frontend dropdowns from DB, avoids 314-item static array in frontend that could go stale
 - [Phase 02-02]: ILIKE used for case-insensitive commodity+state matching — handles variant capitalisation from user input without frontend normalisation
 - [Phase 02-02]: is_best/is_worst guarded by years_of_data >= 3 (inherited from Phase 02-01) — sparse series never receive best/worst labels to avoid misleading farmers
+- [Phase 04]: Alembic migrations chained off c2d3e4f5a6b7 (price_bounds ML head) not a1b2c3d4e5f6 (community features) — preserves dual-head topology, avoids forced merge
+- [Phase 04]: forecast_cache uses composite unique index not application-level deduplication — DB enforces cache invariant, prevents duplicate inserts
+- [Phase 04]: model_training_log rmse_mean and mape_mean are NOT NULL — model cannot be registered without validated RMSE/MAPE metrics
 
 ### Pending Todos
 
@@ -119,5 +123,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 02 Plan 02 complete — FastAPI seasonal endpoint + Next.js calendar dashboard; human verification approved
+Stopped at: Phase 04 Plan 01 complete — ML schema (model_training_log + forecast_cache) + skforecast/xgboost installed
 Resume file: None

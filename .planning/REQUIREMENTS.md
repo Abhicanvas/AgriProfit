@@ -22,11 +22,11 @@
 ### Price Forecasting (XGBoost Baseline)
 
 - [ ] **FORE-01**: System trains one XGBoost model per commodity using `ForecasterRecursiveMultiSeries` across all districts with >= 730 days of data
-- [ ] **FORE-02**: Each model is validated using 4-fold walk-forward `TimeSeriesSplit` — RMSE and MAPE logged per fold before the model is accepted for serving
+- [x] **FORE-02**: Each model is validated using 4-fold walk-forward `TimeSeriesSplit` — RMSE and MAPE logged per fold before the model is accepted for serving
 - [ ] **FORE-03**: User can request a 7-day and 14-day price forecast for any commodity+district combination with sufficient data
 - [ ] **FORE-04**: Forecast response includes direction (up/down/flat), predicted range (not a point estimate), and a data-coverage tier label ("full model" / "seasonal average fallback")
 - [ ] **FORE-05**: Commodity-district pairs with fewer than 365 days of data are automatically routed to the seasonal calendar fallback — not served an ML forecast
-- [ ] **FORE-06**: Forecast results are cached in a `forecast_cache` PostgreSQL table and refreshed nightly via the existing APScheduler
+- [x] **FORE-06**: Forecast results are cached in a `forecast_cache` PostgreSQL table and refreshed nightly via the existing APScheduler
 
 ### Feature Engineering
 
@@ -52,7 +52,7 @@
 
 ### ML Serving Infrastructure
 
-- [ ] **SERV-01**: FastAPI exposes `/api/v1/forecast/{commodity}/{district}`, `/api/v1/seasonal/{commodity}/{state}`, `/api/v1/soil-advisor/{state}/{district}/{block}`, and `/api/v1/arbitrage/{commodity}/{district}` endpoints
+- [x] **SERV-01**: FastAPI exposes `/api/v1/forecast/{commodity}/{district}`, `/api/v1/seasonal/{commodity}/{state}`, `/api/v1/soil-advisor/{state}/{district}/{block}`, and `/api/v1/arbitrage/{commodity}/{district}` endpoints
 - [ ] **SERV-02**: Trained models are loaded at FastAPI startup via the existing lifespan pattern into `app.state.models` — model files live in `ml/artifacts/`
 - [ ] **SERV-03**: Model loading uses an LRU cache with configurable memory limit — models are lazy-loaded on first request, not all at startup
 - [ ] **SERV-04**: APScheduler runs nightly forecast refresh job — stale forecasts are regenerated, new price data since last refresh is incorporated
@@ -110,12 +110,12 @@
 | FEAT-03 | Phase 3 | Pending |
 | FEAT-04 | Phase 3 | Pending |
 | FORE-01 | Phase 4 | Pending |
-| FORE-02 | Phase 4 | Pending |
+| FORE-02 | Phase 4 | Complete |
 | FORE-03 | Phase 4 | Pending |
 | FORE-04 | Phase 4 | Pending |
 | FORE-05 | Phase 4 | Pending |
-| FORE-06 | Phase 4 | Pending |
-| SERV-01 | Phase 4 | Pending |
+| FORE-06 | Phase 4 | Complete |
+| SERV-01 | Phase 4 | Complete |
 | SERV-02 | Phase 4 | Pending |
 | SERV-03 | Phase 4 | Pending |
 | SERV-04 | Phase 4 | Pending |
