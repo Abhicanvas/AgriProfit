@@ -132,19 +132,27 @@ def score_crop(profile: dict, tolerances: dict) -> float:
 def rank_crops(profile: dict, crop_rows: list[dict]) -> list[dict]:
     """Rank crops by suitability for the given block soil profile.
 
+    Aggregates per-nutrient scores by crop name so each crop appears exactly
+    once in the result (sum of scores across all its nutrient rows).
+
     Args:
         profile: Block nutrient profile dict.
         crop_rows: List of crop_row dicts (one row per crop-nutrient combination).
 
     Returns:
-        Up to 5 crop_row dicts with an added "score" key, sorted by score
-        descending. Crops scoring 0 are excluded.
+        Up to 5 dicts with keys crop_name, total_score, sorted by total_score
+        descending. Crops whose total score is 0 are excluded.
     """
-    scored = []
+    totals: dict[str, float] = {}
     for row in crop_rows:
         s = score_crop(profile, row)
-        if s > 0:
-            scored.append({**row, "score": s})
+        name = row["crop_name"]
+        totals[name] = totals.get(name, 0.0) + s
 
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:5]
+    ranked = [
+        {"crop_name": name, "score": total}
+        for name, total in totals.items()
+        if total > 0
+    ]
+    ranked.sort(key=lambda x: x["score"], reverse=True)
+    return ranked[:5]
