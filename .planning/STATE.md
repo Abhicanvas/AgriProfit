@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-03T07:55:00.000Z"
+status: in_progress
+last_updated: "2026-03-03T13:32:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 16
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** A farmer in any district can ask "what should I grow and when should I sell it?" and get a data-backed answer.
-**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Plans 01 and 03 complete; Plan 04 (API wiring) next
+**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Plans 01-04 complete; Plan 05 (frontend forecast page) next
 
 ## Current Position
 
 Phase: 4 of 6 (XGBoost Forecasting + Serving) — In Progress
-Plan: 3 of 5 in current phase — COMPLETE (Plans 02 and 04 complete; Plan 04 next)
-Status: Phase 04 Plans 02+03 complete — XGBoost training script + ML serving core; Plan 04 (forecast API) next
-Last activity: 2026-03-03 — Plan 04-02 complete: train_xgboost.py, test_ml_training.py, ml/artifacts/.gitkeep
+Plan: 4 of 5 in current phase — COMPLETE (Plans 01-04 complete; Plan 05 next)
+Status: Phase 04 Plans 01-04 complete — ML schemas, training script, ML serving core, forecast API serving; Plan 05 (frontend) next
+Last activity: 2026-03-03 — Plan 04-04 complete: forecast API endpoint registered, model cache attached, nightly scheduler job, 6 tests passing
 
-Progress: [██████████] 75% (12/16 plans)
+Progress: [██████████] 81% (13/16 plans)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 75% (12/16 plans)
 | Phase 04-xgboost-forecasting-serving P01 | 10 | 2 tasks | 7 files |
 | Phase 04-xgboost-forecasting-serving P02 | 5 | 3 tasks | 3 files |
 | Phase 04 P03 | 5 | 2 tasks | 6 files |
+| Phase 04-xgboost-forecasting-serving P04 | 12 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,9 @@ Recent decisions affecting current work:
 - [Phase 04]: ARTIFACTS_DIR resolves as repo_root/ml/artifacts/ via 4-level parent resolution from loader.py
 - [Phase 04]: MIN_DAYS_SERVE=365: districts with fewer days always receive seasonal average fallback to prevent poor-quality forecasts
 - [Phase 04]: mape_to_confidence_colour thresholds: <10% Green, 10-25% Yellow, >=25% or None Red
+- [Phase 04]: Route handler uses def not async def — get_or_load_model calls joblib.load (disk I/O); FastAPI runs def handlers in threadpool, avoiding event loop block
+- [Phase 04]: forecast_ml_router alias used to avoid name collision with existing forecasts_router (app/forecasts/routes.py)
+- [Phase 04]: refresh_forecast_cache_job only refreshes entries where expires_at < now() — incremental refresh, not full regeneration
 
 ### Pending Todos
 
@@ -128,5 +132,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-03-PLAN.md: ML serving core (LRU loader + ForecastService + Pydantic schemas), 7 unit tests passing
+Stopped at: Completed 04-04-PLAN.md: forecast API serving — endpoint registered, model cache attached, nightly scheduler job added, 6 tests passing
 Resume file: None
