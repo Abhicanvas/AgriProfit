@@ -50,6 +50,9 @@ from app.transport.routes import router as transport_router
 from app.uploads.routes import router as uploads_router
 from app.inventory.routes import router as inventory_router
 from app.sales.routes import router as sales_router
+from app.seasonal.routes import router as seasonal_router
+from app.forecast.routes import router as forecast_ml_router
+from app.soil_advisor.routes import router as soil_advisor_router
 
 
 # =============================================================================
@@ -140,6 +143,18 @@ TAGS_METADATA = [
         "name": "Transport",
         "description": "Transport cost calculator. Compare costs and find optimal mandi for selling produce.",
     },
+    {
+        "name": "Seasonal",
+        "description": "Seasonal price calendar. View best and worst months to sell your produce based on 10 years of data.",
+    },
+    {
+        "name": "Forecast",
+        "description": "XGBoost price forecasts. 7-day and 14-day predictions with confidence band.",
+    },
+    {
+        "name": "Soil Advisor",
+        "description": "ICAR-based soil crop advisor. State → district → block drill-down showing NPK/pH distributions, ranked crop recommendations, and fertiliser advice cards.",
+    },
 ]
 
 
@@ -197,6 +212,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start scheduler: {e}", exc_info=True)
         logger.warning("API will continue without automatic price syncing")
+
+    # Attach ML model LRU cache to app.state
+    try:
+        from app.ml.loader import get_model_cache
+        app.state.model_cache = get_model_cache()
+        logger.info("ML model LRU cache attached to app.state")
+    except Exception as e:
+        logger.error(f"Failed to attach model cache: {e}", exc_info=True)
 
     yield
 
@@ -343,6 +366,9 @@ app.include_router(transport_router, prefix="/api/v1")
 app.include_router(uploads_router, prefix="/api/v1")
 app.include_router(inventory_router, prefix="/api/v1")
 app.include_router(sales_router, prefix="/api/v1")
+app.include_router(seasonal_router, prefix="/api/v1")
+app.include_router(forecast_ml_router, prefix="/api/v1")
+app.include_router(soil_advisor_router, prefix="/api/v1")
 
 
 # =============================================================================
