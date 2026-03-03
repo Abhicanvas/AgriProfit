@@ -13,6 +13,8 @@ from .uploaded_file import UploadedFile
 from .refresh_token import RefreshToken
 from .login_attempt import LoginAttempt
 from .road_distance_cache import RoadDistanceCache
+from .model_training_log import ModelTrainingLog
+from .forecast_cache import ForecastCache
 
 __all__ = [
     "User",
@@ -32,4 +34,6 @@ __all__ = [
     "RefreshToken",
     "LoginAttempt",
     "RoadDistanceCache",
+    "ModelTrainingLog",
+    "ForecastCache",
 ]
