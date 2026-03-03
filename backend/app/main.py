@@ -53,6 +53,7 @@ from app.sales.routes import router as sales_router
 from app.seasonal.routes import router as seasonal_router
 from app.forecast.routes import router as forecast_ml_router
 from app.soil_advisor.routes import router as soil_advisor_router
+from app.arbitrage.routes import router as arbitrage_router
 
 
 # =============================================================================
@@ -154,6 +155,10 @@ TAGS_METADATA = [
     {
         "name": "Soil Advisor",
         "description": "ICAR-based soil crop advisor. State → district → block drill-down showing NPK/pH distributions, ranked crop recommendations, and fertiliser advice cards.",
+    },
+    {
+        "name": "Arbitrage",
+        "description": "Mandi arbitrage signals. Top-3 destination mandis ranked by net profit per quintal after freight, spoilage, and all mandi fees. Results filtered by configurable margin threshold (default 10%).",
     },
 ]
 
@@ -369,6 +374,7 @@ app.include_router(sales_router, prefix="/api/v1")
 app.include_router(seasonal_router, prefix="/api/v1")
 app.include_router(forecast_ml_router, prefix="/api/v1")
 app.include_router(soil_advisor_router, prefix="/api/v1")
+app.include_router(arbitrage_router, prefix="/api/v1")
 
 
 # =============================================================================
