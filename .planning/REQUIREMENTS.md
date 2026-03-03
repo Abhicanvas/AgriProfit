@@ -45,10 +45,10 @@
 
 ### Mandi Arbitrage Dashboard
 
-- [ ] **ARB-01**: User can select a commodity and origin district and see the top 3 destination mandis ranked by net profit after freight + spoilage (using the existing transport engine)
-- [ ] **ARB-02**: Arbitrage signals are only shown when net margin after transport exceeds a configurable threshold (default: 10% of commodity modal price)
-- [ ] **ARB-03**: Dashboard only displays data fresher than 7 days — stale data is flagged rather than shown as current
-- [ ] **ARB-04**: Each arbitrage result shows distance (km), travel time, freight cost, spoilage estimate, and net expected profit per quintal
+- [x] **ARB-01**: User can select a commodity and origin district and see the top 3 destination mandis ranked by net profit after freight + spoilage (using the existing transport engine)
+- [x] **ARB-02**: Arbitrage signals are only shown when net margin after transport exceeds a configurable threshold (default: 10% of commodity modal price)
+- [x] **ARB-03**: Dashboard only displays data fresher than 7 days — stale data is flagged rather than shown as current
+- [x] **ARB-04**: Each arbitrage result shows distance (km), travel time, freight cost, spoilage estimate, and net expected profit per quintal
 
 ### ML Serving Infrastructure
 
@@ -126,10 +126,10 @@
 | SOIL-04 | Phase 5 | Complete |
 | SOIL-05 | Phase 5 | Complete |
 | UI-03 | Phase 5 | Complete |
-| ARB-01 | Phase 6 | Pending |
-| ARB-02 | Phase 6 | Pending |
-| ARB-03 | Phase 6 | Pending |
-| ARB-04 | Phase 6 | Pending |
+| ARB-01 | Phase 6 | Complete |
+| ARB-02 | Phase 6 | Complete |
+| ARB-03 | Phase 6 | Complete |
+| ARB-04 | Phase 6 | Complete |
 | UI-04 | Phase 6 | Pending |
 | UI-05 | Phases 2-6 | Complete |
 
