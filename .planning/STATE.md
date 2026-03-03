@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T07:47:37.964Z"
+last_updated: "2026-03-03T07:51:41.521Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 16
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** A farmer in any district can ask "what should I grow and when should I sell it?" and get a data-backed answer.
-**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Plan 01 complete; Plans 02 and 03 ready (Wave 2)
+**Current focus:** Phase 4 — XGBoost Forecasting + Serving — Plans 01 and 03 complete; Plan 04 (API wiring) next
 
 ## Current Position
 
 Phase: 4 of 6 (XGBoost Forecasting + Serving) — In Progress
-Plan: 1 of 5 in current phase — COMPLETE (Plan 02 next)
-Status: Phase 04 Plan 01 complete — ML schema (model_training_log + forecast_cache) + skforecast/xgboost installed (commits: db93859, ba66f51)
-Last activity: 2026-03-03 — Plan 04-01 complete: Alembic migrations, ORM models, ML dependencies
+Plan: 3 of 5 in current phase — COMPLETE (Plan 04 next)
+Status: Phase 04 Plan 03 complete — ML serving core: LRU loader, ForecastService, Pydantic schemas, 7 unit tests (commits: ea69926, 8a05270)
+Last activity: 2026-03-03 — Plan 04-03 complete: loader.py, forecast/schemas.py, forecast/service.py, 7 unit tests
 
-Progress: [█████████░] 63% (10/16 plans)
+Progress: [██████████] 69% (11/16 plans)
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 63% (10/16 plans)
 | Phase 02-seasonal-price-calendar P01 | 15 | 3 tasks | 5 files |
 | Phase 02-seasonal-price-calendar P02 | 15 | 2 tasks | 5 files |
 | Phase 04-xgboost-forecasting-serving P01 | 10 | 2 tasks | 7 files |
+| Phase 04 P03 | 5 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Alembic migrations chained off c2d3e4f5a6b7 (price_bounds ML head) not a1b2c3d4e5f6 (community features) — preserves dual-head topology, avoids forced merge
 - [Phase 04]: forecast_cache uses composite unique index not application-level deduplication — DB enforces cache invariant, prevents duplicate inserts
 - [Phase 04]: model_training_log rmse_mean and mape_mean are NOT NULL — model cannot be registered without validated RMSE/MAPE metrics
+- [Phase 04]: ARTIFACTS_DIR resolves as repo_root/ml/artifacts/ via 4-level parent resolution from loader.py
+- [Phase 04]: MIN_DAYS_SERVE=365: districts with fewer days always receive seasonal average fallback to prevent poor-quality forecasts
+- [Phase 04]: mape_to_confidence_colour thresholds: <10% Green, 10-25% Yellow, >=25% or None Red
 
 ### Pending Todos
 
@@ -123,5 +127,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 04 Plan 01 complete — ML schema (model_training_log + forecast_cache) + skforecast/xgboost installed
+Stopped at: Completed 04-03-PLAN.md: ML serving core (LRU loader + ForecastService + Pydantic schemas), 7 unit tests passing
 Resume file: None

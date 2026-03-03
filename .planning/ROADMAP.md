@@ -130,6 +130,6 @@ Phases 1, 2, 3 execute sequentially. Phase 4 depends on Phase 3. Phases 5 and 6 
 | 1. District Harmonisation + Price Cleaning | 3/3 | Complete   | 2026-03-02 |
 | 2. Seasonal Price Calendar | 2/2 | Complete    | 2026-03-03 |
 | 3. Feature Engineering Foundation | 2/2 | Complete   | 2026-03-03 |
-| 4. XGBoost Forecasting + Serving | 1/5 | In Progress|  |
+| 4. XGBoost Forecasting + Serving | 3/5 | In Progress|  |
 | 5. Soil Crop Advisor | 2/2 | Complete    | 2026-03-03 |
 | 6. Mandi Arbitrage Dashboard | 2/2 | Complete    | 2026-03-03 |
