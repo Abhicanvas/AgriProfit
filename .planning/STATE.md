@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-03-03T01:08:00.000Z"
+status: unknown
+last_updated: "2026-03-03T01:24:54.514Z"
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 6
+  completed_phases: 2
+  total_plans: 16
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** A farmer in any district can ask "what should I grow and when should I sell it?" and get a data-backed answer.
-**Current focus:** Phase 5 — Soil Crop Advisor — Plan 01 complete, Plan 02 next
+**Current focus:** Phase 5 — Soil Crop Advisor — Plan 02 tasks complete, awaiting checkpoint:human-verify for Task 3
 
 ## Current Position
 
 Phase: 5 of 6 (Soil Crop Advisor) — IN PROGRESS
-Plan: 1 of 3 in current phase — COMPLETE
-Status: Phase 05 Plan 01 complete — soil advisor backend foundation: Alembic migration, pure-function suitability/fertiliser modules (17 tests GREEN), idempotent bulk seeder for 9,643 CSV files
-Last activity: 2026-03-03 — Plan 05-01 complete: soil_profiles + soil_crop_suitability tables, ICAR rank_crops(), generate_fertiliser_advice(), seed_soil_suitability.py
+Plan: 2 of 3 in current phase — AWAITING CHECKPOINT
+Status: Phase 05 Plan 02 tasks 1-2 complete — 4 FastAPI soil-advisor endpoints, 21 integration tests, Next.js drill-down UI, 3 Vitest behavioral tests; Task 3 (checkpoint:human-verify) awaiting manual approval
+Last activity: 2026-03-03 — Plan 05-02 tasks complete: schemas.py, service.py, routes.py, test_soil_advisor_api.py, soil-advisor.ts, page.tsx, soil-advisor.test.tsx
 
 Progress: [█████░░░░░] 50%
 
@@ -42,13 +42,14 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | Phase 01 | 3/3 | 26 min | 8.7 min |
 | Phase 03 | 2/2 | 8 min | 4.0 min |
-| Phase 05 | 1/3 | 4 min | 4.0 min |
+| Phase 05 | 2/3 | 15 min | 7.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 4 min (01-02), 5 min (01-03), 4 min (03-01), 4 min (03-02), 4 min (05-01)
+- Last 5 plans: 5 min (01-03), 4 min (03-01), 4 min (03-02), 4 min (05-01), 11 min (05-02)
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 05 P02 | 11 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Alembic down_revision corrected to merge both current heads (4be60c2d7319, e2f3a4b5c6d7) — plan had stale single-revision reference to c2d3e4f5a6b7
 - [Phase 05]: score_crop 3-tier scoring: low-tolerance crops receive +1.0 base bonus for thriving in deficient soil; medium/high-tolerance crops return 0.0 when block is deficient
 - [Phase 05]: pH excluded from FERTILISER_ADVICE by design — pH range check requires on-site testing, not a single fertiliser recommendation
+- [Phase 05]: Query params used for state/district/block on /profile endpoint to handle block names containing hyphens/spaces (e.g., ANANTAPUR - 4689)
+- [Phase 05]: CSS percentage-width divs for nutrient bars instead of Recharts — simpler, mobile-friendly, DOM-testable
+- [Phase 05]: SoilDisclaimer renders with no dismiss/close button — mandatory non-dismissable by plan spec
+- [Phase 05]: Coverage gate (COVERED_STATES) applied only to /profile, not /districts or /blocks — lists return empty arrays
 
 ### Pending Todos
 
@@ -93,5 +98,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed Phase 05 Plan 01 (Soil Advisor Backend Foundation — Alembic migration, suitability.py, fertiliser.py, seed_soil_suitability.py, 17 tests GREEN)
+Stopped at: Phase 05 Plan 02 Task 3 (checkpoint:human-verify) — apply migration, run seeder, verify UI + API manually
 Resume file: None

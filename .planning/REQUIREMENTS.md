@@ -37,11 +37,11 @@
 
 ### Soil Crop Advisor
 
-- [ ] **SOIL-01**: User can select a state + district + block and see the soil health profile — N/P/K/OC/pH % distributions (high/medium/low) for the most recent cycle
-- [ ] **SOIL-02**: System maps the block's deficiency profile to a ranked list of suitable crops using ICAR crop-soil requirement thresholds
-- [ ] **SOIL-03**: Every recommendation displays "Block-average soil data for [block name] — not field-level measurement" to prevent misleading farmers
-- [ ] **SOIL-04**: Fertiliser advice is generated per nutrient deficiency (e.g. "73% of soils in this block are nitrogen-deficient — consider urea application before planting")
-- [ ] **SOIL-05**: Coverage gap is explicit in the UI — soil advisor is labelled "Available for 31 states" with a map showing covered vs uncovered regions
+- [x] **SOIL-01**: User can select a state + district + block and see the soil health profile — N/P/K/OC/pH % distributions (high/medium/low) for the most recent cycle
+- [x] **SOIL-02**: System maps the block's deficiency profile to a ranked list of suitable crops using ICAR crop-soil requirement thresholds
+- [x] **SOIL-03**: Every recommendation displays "Block-average soil data for [block name] — not field-level measurement" to prevent misleading farmers
+- [x] **SOIL-04**: Fertiliser advice is generated per nutrient deficiency (e.g. "73% of soils in this block are nitrogen-deficient — consider urea application before planting")
+- [x] **SOIL-05**: Coverage gap is explicit in the UI — soil advisor is labelled "Available for 31 states" with a map showing covered vs uncovered regions
 
 ### Mandi Arbitrage Dashboard
 
@@ -61,9 +61,9 @@
 
 - [ ] **UI-01**: Seasonal price calendar page — commodity + state selector, monthly bar/line chart, best/worst month highlights
 - [ ] **UI-02**: Price forecast page — commodity + district selector, 14-day forecast chart with confidence band, tier label, data coverage indicator
-- [ ] **UI-03**: Soil advisor page — state -> district -> block drill-down, NPK/pH distribution bars, crop recommendation list, fertiliser advice cards
+- [x] **UI-03**: Soil advisor page — state -> district -> block drill-down, NPK/pH distribution bars, crop recommendation list, fertiliser advice cards
 - [ ] **UI-04**: Arbitrage dashboard — commodity + origin district selector, ranked mandi table with net profit, distance, freshness indicator
-- [ ] **UI-05**: All dashboards display coverage gap messages when a feature is unavailable for the selected region (no silent failures)
+- [x] **UI-05**: All dashboards display coverage gap messages when a feature is unavailable for the selected region (no silent failures)
 
 ## v2 Requirements
 
@@ -120,18 +120,18 @@
 | SERV-03 | Phase 4 | Pending |
 | SERV-04 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
-| SOIL-01 | Phase 5 | Pending |
-| SOIL-02 | Phase 5 | Pending |
-| SOIL-03 | Phase 5 | Pending |
-| SOIL-04 | Phase 5 | Pending |
-| SOIL-05 | Phase 5 | Pending |
-| UI-03 | Phase 5 | Pending |
+| SOIL-01 | Phase 5 | Complete |
+| SOIL-02 | Phase 5 | Complete |
+| SOIL-03 | Phase 5 | Complete |
+| SOIL-04 | Phase 5 | Complete |
+| SOIL-05 | Phase 5 | Complete |
+| UI-03 | Phase 5 | Complete |
 | ARB-01 | Phase 6 | Pending |
 | ARB-02 | Phase 6 | Pending |
 | ARB-03 | Phase 6 | Pending |
 | ARB-04 | Phase 6 | Pending |
 | UI-04 | Phase 6 | Pending |
-| UI-05 | Phases 2-6 | Pending |
+| UI-05 | Phases 2-6 | Complete |
 
 **Coverage:**
 - v1 requirements: 35 total

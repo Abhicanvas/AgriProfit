@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Seasonal Price Calendar** - Deliver the first farmer-facing feature via pure SQL aggregation
 - [x] **Phase 3: Feature Engineering Foundation** - Build and unit-test all shared feature functions before any model training
 - [ ] **Phase 4: XGBoost Forecasting + Serving** - Train, validate, cache, and serve the price forecasting baseline
-- [ ] **Phase 5: Soil Crop Advisor** - Map block soil profiles to crop recommendations using ICAR rule-based lookup
+- [x] **Phase 5: Soil Crop Advisor** - Map block soil profiles to crop recommendations using ICAR rule-based lookup (completed 2026-03-03)
 - [ ] **Phase 6: Mandi Arbitrage Dashboard** - Surface net-profit-ranked arbitrage signals using the existing transport engine
 
 ## Phase Details
@@ -131,5 +131,5 @@ Phases 1, 2, 3 execute sequentially. Phase 4 depends on Phase 3. Phases 5 and 6 
 | 2. Seasonal Price Calendar | 0/2 | Not started | - |
 | 3. Feature Engineering Foundation | 2/2 | Complete   | 2026-03-03 |
 | 4. XGBoost Forecasting + Serving | 0/5 | Not started | - |
-| 5. Soil Crop Advisor | 1/2 | In progress | - |
+| 5. Soil Crop Advisor | 2/2 | Complete   | 2026-03-03 |
 | 6. Mandi Arbitrage Dashboard | 0/2 | Not started | - |
