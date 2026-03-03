@@ -265,6 +265,7 @@ class MandiComparison(BaseModel):
     # Stress test & guardrail
     stress_test: StressTestResult | None = Field(default=None, description="Worst-case scenario simulation")
     economic_warning: str | None = Field(default=None, description="Set when economic anomaly detected")
+    latest_price_date: date | None = Field(default=None, description="Date of most recent price data for this mandi")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -273,8 +274,9 @@ class TransportCompareResponse(BaseModel):
     """
     Response containing transport comparison results.
 
-    Lists mandis ranked by net profit (highest first),
-    with complete cost breakdowns for informed decision making.
+    Lists mandis ranked by verdict tier (excellent → good → marginal → not_viable),
+    then by net profit within each tier. This ensures safer, closer options
+    rank above marginally more profitable but riskier distant ones.
     """
     commodity: str = Field(..., description="Commodity name being transported")
     quantity_kg: float = Field(..., description="Quantity in kg")
@@ -282,7 +284,7 @@ class TransportCompareResponse(BaseModel):
 
     comparisons: list[MandiComparison] = Field(
         ...,
-        description="List of mandi comparisons sorted by net profit (descending)"
+        description="List of mandi comparisons sorted by verdict tier, then net profit within tier"
     )
 
     best_mandi: MandiComparison | None = Field(
