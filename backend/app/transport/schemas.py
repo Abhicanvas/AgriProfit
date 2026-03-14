@@ -6,10 +6,20 @@ This module defines Pydantic models for:
 - Mandi comparison results with costs breakdown
 - Vehicle type enumeration
 """
+from datetime import date
 from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class StressTestResult(BaseModel):
+    """Worst-case scenario simulation results."""
+    worst_case_profit: float = Field(..., description="Net profit after diesel+15%, toll+25%, price-12%, spoilage+5pp, grade_discount+3pp")
+    break_even_price_per_kg: float = Field(..., description="Minimum price per kg to break even under stress")
+    margin_of_safety_pct: float = Field(..., description="Buffer between normal and worst-case profit (%)")
+    verdict_survives_stress: bool = Field(..., description="True if worst_case_profit > 0")
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VehicleType(str, Enum):
@@ -136,11 +146,15 @@ class CostBreakdown(BaseModel):
         description="Agent commission (2.5% of gross)",
         json_schema_extra={"example": 750.0}
     )
-    additional_cost: float = Field(
-        ...,
-        description="Fixed costs per trip (weighbridge, parking, docs)",
-        json_schema_extra={"example": 200.0}
-    )
+    additional_cost: float = Field(..., description="Fixed costs per trip (weighbridge, parking, docs)", json_schema_extra={"example": 200.0})
+    driver_bata: float = Field(default=0.0, description="Driver daily bata for trip duration")
+    cleaner_bata: float = Field(default=0.0, description="Cleaner bata (trucks only; 0 for tempo)")
+    halt_cost: float = Field(default=0.0, description="Night halt cost (applied when round-trip > 12 hours)")
+    breakdown_reserve: float = Field(default=0.0, description="Breakdown buffer at ₹1/km (both ways)")
+    permit_cost: float = Field(default=0.0, description="Interstate permit cost (₹1,200 if crossing state boundary)")
+    rto_buffer: float = Field(default=0.0, description="RTO friction buffer (1.5% intrastate / 2.5% interstate)")
+    loading_hamali: float = Field(default=0.0, description="Regional loading hamali at source")
+    unloading_hamali: float = Field(default=0.0, description="Regional unloading hamali at mandi")
     total_cost: float = Field(
         ...,
         description="Sum of all costs",
@@ -222,17 +236,47 @@ class MandiComparison(BaseModel):
         json_schema_extra={"example": "recommended"}
     )
 
-    model_config = ConfigDict(
-        from_attributes=True
+    verdict: str = Field(
+        default="not_viable",
+        description="Sell verdict: excellent / good / marginal / not_viable",
     )
+    verdict_reason: str = Field(
+        default="",
+        description="Human-readable explanation of the verdict",
+    )
+    distance_source: str = Field(default="estimated", description="Distance data source: 'osrm' or 'estimated'")
+    # Route & time
+    travel_time_hours: float = Field(default=0.0, description="Estimated round-trip travel time in hours")
+    route_type: str = Field(default="mixed", description="Road category: 'highway' | 'mixed' | 'hill'")
+    is_interstate: bool = Field(default=False, description="True if source state differs from mandi state")
+    diesel_price_used: float = Field(default=98.0, description="Diesel price (₹/L) used in freight calculation")
+    # Perishability
+    spoilage_percent: float = Field(default=0.0, description="Estimated quantity loss to spoilage (%)")
+    weight_loss_percent: float = Field(default=0.0, description="Moisture/weight shrinkage during transit (%)")
+    grade_discount_percent: float = Field(default=0.0, description="Auction grade discount applied (%)")
+    net_saleable_quantity_kg: float = Field(default=0.0, description="Quantity after spoilage and weight loss (kg)")
+    # Price analytics
+    price_volatility_7d: float = Field(default=0.0, description="7-day price volatility (CV%)")
+    price_trend: str = Field(default="stable", description="Price direction: 'rising' | 'falling' | 'stable'")
+    # Risk
+    risk_score: float = Field(default=0.0, description="Composite risk score 0–100 (higher = riskier)")
+    confidence_score: int = Field(default=100, description="Price data confidence 0–100")
+    stability_class: str = Field(default="stable", description="Risk tier: 'stable' | 'moderate' | 'volatile'")
+    # Stress test & guardrail
+    stress_test: StressTestResult | None = Field(default=None, description="Worst-case scenario simulation")
+    economic_warning: str | None = Field(default=None, description="Set when economic anomaly detected")
+    latest_price_date: date | None = Field(default=None, description="Date of most recent price data for this mandi")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TransportCompareResponse(BaseModel):
     """
     Response containing transport comparison results.
 
-    Lists mandis ranked by net profit (highest first),
-    with complete cost breakdowns for informed decision making.
+    Lists mandis ranked by verdict tier (excellent → good → marginal → not_viable),
+    then by net profit within each tier. This ensures safer, closer options
+    rank above marginally more profitable but riskier distant ones.
     """
     commodity: str = Field(..., description="Commodity name being transported")
     quantity_kg: float = Field(..., description="Quantity in kg")
@@ -240,7 +284,7 @@ class TransportCompareResponse(BaseModel):
 
     comparisons: list[MandiComparison] = Field(
         ...,
-        description="List of mandi comparisons sorted by net profit (descending)"
+        description="List of mandi comparisons sorted by verdict tier, then net profit within tier"
     )
 
     best_mandi: MandiComparison | None = Field(
@@ -251,6 +295,11 @@ class TransportCompareResponse(BaseModel):
     total_mandis_analyzed: int = Field(
         ...,
         description="Total number of mandis considered"
+    )
+
+    distance_note: str | None = Field(
+        default=None,
+        description="Set when any distance used the haversine fallback instead of live routing data",
     )
 
     model_config = ConfigDict(

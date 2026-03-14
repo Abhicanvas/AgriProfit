@@ -24,7 +24,31 @@
       "Bash(\"C:\\\\Users\\\\alame\\\\Desktop\\\\repo-root\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\":*)",
       "Bash(dir \"C:\\\\Users\\\\alame\\\\Desktop\\\\repo-root\\\\agmarknet_daily_10yr.parquet\")",
       "Bash(npx vitest run:*)",
-      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx vitest:*)"
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx vitest:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:apmcbaroda.org)",
+      "WebFetch(domain:tollguru.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:hsamb.org.in)",
+      "WebFetch(domain:www.goodseva.com)",
+      "WebFetch(domain:trucksup.com)",
+      "WebFetch(domain:shipzip.in)",
+      "WebFetch(domain:www.indiabudget.gov.in)",
+      "WebFetch(domain:abctransport.co.in)",
+      "WebFetch(domain:www.relianceroads.com)",
+      "WebFetch(domain:thewire.in)",
+      "WebFetch(domain:okararoadways.net)",
+      "WebFetch(domain:sohamswami.org.in)",
+      "WebFetch(domain:blog.bijak.in)",
+      "WebFetch(domain:www.linkedin.com)",
+      "WebFetch(domain:agriculturist.medium.com)",
+      "WebFetch(domain:www.superprocure.com)",
+      "WebFetch(domain:agritech.tnau.ac.in)",
+      "WebFetch(domain:citizenmatters.in)",
+      "WebFetch(domain:www.truckqik.com)",
+      "Bash(python:*)",
+      "Bash(git:*)"
     ]
   }
 }

@@ -311,6 +311,57 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # ROUTING
+    # =========================================================================
+    osrm_base_url: str = Field(
+        default="http://router.project-osrm.org/route/v1/driving",
+        description="OSRM routing API base URL. Override to use self-hosted instance.",
+    )
+    routing_provider: str = Field(
+        default="osrm",
+        description="Routing provider identifier (osrm, osrm_self_hosted). For metrics/logging.",
+    )
+
+    # =========================================================================
+    # TRANSPORT ECONOMICS
+    # =========================================================================
+    diesel_price_per_liter: float = Field(
+        default=98.0,
+        ge=50.0,
+        le=200.0,
+        description="Current diesel price in ₹/L. Affects freight rate via sensitivity coefficient.",
+    )
+    diesel_baseline_price: float = Field(
+        default=98.0,
+        ge=50.0,
+        le=200.0,
+        description="Baseline diesel price used for sensitivity calculation (₹/L).",
+    )
+    transport_weather_risk_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Weather risk placeholder (0–1). Used in composite risk score calculation.",
+    )
+    transport_max_mandis_evaluated: int = Field(
+        default=25,
+        ge=5,
+        le=50,
+        description="Hard cap on mandis evaluated per /compare request (performance bound).",
+    )
+
+    # =========================================================================
+    # ARBITRAGE
+    # =========================================================================
+    arbitrage_margin_threshold_pct: float = Field(
+        default=10.0,
+        ge=0.0,
+        le=50.0,
+        description="Minimum net margin (%) to display arbitrage signal. "
+                    "Computed as (net_profit / gross_revenue) * 100 >= threshold. Default: 10%.",
+    )
+
+    # =========================================================================
     # MONITORING
     # =========================================================================
     sentry_dsn: Optional[str] = Field(

@@ -1093,7 +1093,7 @@ def get_road_distance(
             f"{lon1},{lat1};{lon2},{lat2}"
             f"?overview=false&steps=false"
         )
-        with httpx.Client(timeout=8.0) as client:
+        with httpx.Client(timeout=3.0) as client:
             resp = client.get(url)
         if resp.status_code == 200:
             data = resp.json()
@@ -1109,6 +1109,90 @@ def get_road_distance(
     road_km = haversine_km * multiplier
     _road_distance_cache[cache_key] = road_km
     return road_km
+
+
+def get_road_distances_batch(
+    source_lat: float,
+    source_lon: float,
+    destinations: List[Tuple[float, float]],
+    source_state: str = "",
+    dest_states: Optional[List[str]] = None,
+) -> List[float]:
+    """
+    Get road distances from one source to many destinations in a single OSRM
+    Table API call. Falls back to per-destination haversine on API failure.
+
+    This replaces N sequential OSRM calls with 1 batch call, dramatically
+    reducing latency (e.g. 40 calls × 1-2 s each → 1 call × 1-2 s total).
+    """
+    if not destinations:
+        return []
+
+    n = len(destinations)
+    if dest_states is None:
+        dest_states = [""] * n
+
+    results: List[Optional[float]] = [None] * n
+    uncached: List[int] = []
+
+    # Serve from in-process cache where possible
+    for i, (lat, lon) in enumerate(destinations):
+        ck = (round(source_lat, 4), round(source_lon, 4), round(lat, 4), round(lon, 4))
+        if ck in _road_distance_cache:
+            results[i] = _road_distance_cache[ck]
+        else:
+            uncached.append(i)
+
+    if not uncached:
+        return results  # type: ignore[return-value]
+
+    # Build OSRM Table request: source at index 0, destinations at 1..M
+    coords_parts = [f"{source_lon},{source_lat}"]
+    for i in uncached:
+        lat, lon = destinations[i]
+        coords_parts.append(f"{lon},{lat}")
+
+    dest_param = ";".join(str(j + 1) for j in range(len(uncached)))
+    coords_str = ";".join(coords_parts)
+    batch_url = (
+        "http://router.project-osrm.org/table/v1/driving/"
+        + coords_str
+        + f"?sources=0&destinations={dest_param}&annotations=distance"
+    )
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(batch_url)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("code") == "Ok" and data.get("distances"):
+                dist_row = data["distances"][0]  # distances from source to each dest
+                for j, i in enumerate(uncached):
+                    raw = dist_row[j] if j < len(dist_row) else None
+                    if raw is not None:
+                        road_km = raw / 1000.0
+                    else:
+                        lat, lon = destinations[i]
+                        hav = haversine_distance(source_lat, source_lon, lat, lon)
+                        road_km = hav * _fallback_multiplier(source_state, dest_states[i])
+                    results[i] = road_km
+                    lat, lon = destinations[i]
+                    ck = (round(source_lat, 4), round(source_lon, 4), round(lat, 4), round(lon, 4))
+                    _road_distance_cache[ck] = road_km
+                return results  # type: ignore[return-value]
+    except Exception as e:
+        logger.debug("OSRM Table API unavailable, using haversine fallback: %s", e)
+
+    # Full fallback: haversine for all uncached destinations
+    for i in uncached:
+        lat, lon = destinations[i]
+        hav = haversine_distance(source_lat, source_lon, lat, lon)
+        road_km = hav * _fallback_multiplier(source_state, dest_states[i])
+        results[i] = road_km
+        ck = (round(source_lat, 4), round(source_lon, 4), round(lat, 4), round(lon, 4))
+        _road_distance_cache[ck] = road_km
+
+    return results  # type: ignore[return-value]
 
 def select_vehicle(quantity_kg: float) -> VehicleType:
     """Select appropriate vehicle based on quantity."""
@@ -1379,8 +1463,8 @@ def compare_mandis(request: TransportCompareRequest, db: Session = None) -> List
 
     comparisons: list[MandiComparison] = []
 
-    # Pre-filter and sort by haversine before calling OSRM
-    # This avoids unnecessary routing API calls for distant mandis
+    # Pre-filter by haversine before the batch OSRM call
+    # (avoids including mandis that are clearly out of range)
     candidates = []
     for m in raw_mandis:
         if not m.get("latitude") or not m.get("longitude") or m.get("price_per_kg") is None:
@@ -1391,20 +1475,27 @@ def compare_mandis(request: TransportCompareRequest, db: Session = None) -> List
             continue
         candidates.append((straight_km, m))
 
-    # Sort by straight-line distance and limit OSRM calls to nearest 40
+    # Sort by haversine distance; batch API handles all candidates in one call
     candidates.sort(key=lambda x: x[0])
-    max_osrm_calls = 40
-    candidates = candidates[:max(max_osrm_calls, request.limit * 4)]
+    # Limit candidates: batch OSRM handles all in one call, so keep top 50
+    max_candidates = max(50, request.limit * 4)
+    candidates = candidates[:max_candidates]
 
-    for straight_km, m in candidates:
-        # Get accurate road distance (OSRM with cache + terrain fallback)
-        dest_state = m.get("state") or ""
-        road_dist = get_road_distance(
-            source_lat, source_lon,
-            m["latitude"], m["longitude"],
-            source_state=request.source_state or "",
-            dest_state=dest_state,
-        )
+    # -----------------------------------------------------------------------
+    # Batch distance lookup: 1 OSRM Table call instead of N sequential calls
+    # -----------------------------------------------------------------------
+    destinations = [(m["latitude"], m["longitude"]) for _, m in candidates]
+    dest_states = [m.get("state") or "" for _, m in candidates]
+    road_distances = get_road_distances_batch(
+        source_lat, source_lon,
+        destinations,
+        source_state=request.source_state or "",
+        dest_states=dest_states,
+    )
+
+    for (straight_km, m), road_dist in zip(candidates, road_distances):
+        if road_dist is None:
+            continue
 
         if request.max_distance_km and road_dist > request.max_distance_km:
             continue
