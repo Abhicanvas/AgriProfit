@@ -53,12 +53,12 @@ export interface InventoryAnalysisResponse {
 
 export const inventoryService = {
     async getInventory(): Promise<InventoryItem[]> {
-        const response = await api.get('/inventory');
+        const response = await api.get('/inventory/');
         return response.data;
     },
 
     async addInventory(data: AddInventoryData): Promise<InventoryItem> {
-        const response = await api.post('/inventory', data);
+        const response = await api.post('/inventory/', data);
         return response.data;
     },
 

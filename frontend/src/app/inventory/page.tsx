@@ -6,7 +6,7 @@ import { inventoryService, AddInventoryData } from '@/services/inventory';
 import { commoditiesService } from '@/services/commodities';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,14 +19,13 @@ import { Plus, Trash2, Package } from 'lucide-react';
 export default function InventoryPage() {
     const queryClient = useQueryClient();
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
     const [formData, setFormData] = useState<AddInventoryData>({
         commodity_id: '',
         quantity: 0,
         unit: 'kg'
     });
 
-    const { data: inventory, isLoading } = useQuery({
+    const { data: inventory, isLoading, isError } = useQuery({
         queryKey: ['inventory'],
         queryFn: inventoryService.getInventory,
         staleTime: 2 * 60 * 1000,
@@ -56,7 +55,6 @@ export default function InventoryPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
             toast.success('Item removed');
-            setDeleteTarget(null);
         }
     });
 
@@ -137,7 +135,13 @@ export default function InventoryPage() {
 
                     {isLoading ? (
                         <div>Loading inventory...</div>
-                    ) : inventory?.length === 0 ? (
+                    ) : isError ? (
+                        <div className="text-center py-12 bg-white rounded-lg border border-dashed">
+                            <Package className="mx-auto h-12 w-12 text-red-400" />
+                            <h3 className="mt-2 text-sm font-semibold text-gray-900">Failed to load inventory</h3>
+                            <p className="mt-1 text-sm text-gray-500">Please refresh the page or try again later.</p>
+                        </div>
+                    ) : !inventory || inventory.length === 0 ? (
                         <div className="text-center py-12 bg-white rounded-lg border border-dashed">
                             <Package className="mx-auto h-12 w-12 text-gray-400" />
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">No inventory</h3>
@@ -168,7 +172,7 @@ export default function InventoryPage() {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                                onClick={() => setDeleteTarget({ id: item.id, name: item.commodity_name || 'this item' })}
+                                                                onClick={() => deleteMutation.mutate(item.id)}
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
@@ -184,30 +188,6 @@ export default function InventoryPage() {
                     )}
                 </main>
             </div>
-
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-                <DialogContent className="sm:max-w-[380px]">
-                    <DialogHeader>
-                        <DialogTitle>Remove Item</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to remove <span className="font-semibold">{deleteTarget?.name}</span> from your inventory? This action cannot be undone.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-                            disabled={deleteMutation.isPending}
-                        >
-                            {deleteMutation.isPending ? 'Removing...' : 'Remove'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

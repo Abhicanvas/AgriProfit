@@ -8,8 +8,7 @@ class InventoryBase(BaseModel):
     unit: str = Field(..., min_length=1, max_length=20, description="Unit of measurement (e.g., kg, ton)")
 
 class InventoryCreate(InventoryBase):
-    # Enforce gt=0 only on write — DB records may legitimately be 0 after reads
-    quantity: float = Field(..., gt=0, description="Quantity of the commodity")
+    quantity: float = Field(..., gt=0, description="Quantity must be greater than 0")
 
 class InventoryUpdate(BaseModel):
     quantity: float | None = Field(None, gt=0)
